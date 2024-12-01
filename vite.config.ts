@@ -29,9 +29,13 @@ export default defineConfig(({ command }) => {
           manualChunks: undefined,
         },
       },
+      commonjsOptions: {
+        include: [/papaparse/, /node_modules/]
+      }
     },
     optimizeDeps: {
       include: ["react", "react-dom"],
+      exclude: ['papaparse']
     },
   };
 });

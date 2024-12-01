@@ -1,180 +1,261 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Button } from "@/components/ui/button"
-import { XMLParser, XMLBuilder } from 'fast-xml-parser'
-import yaml from 'js-yaml'
-import Papa from 'papaparse'
-import { WidthIcon } from '@radix-ui/react-icons'
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeftRight, Minimize2, Maximize2, Copy, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { XMLParser, XMLBuilder } from "fast-xml-parser";
+import yaml from "js-yaml";
+// @ts-ignore
+declare const Papa: any;
 
 const formatOptions = [
-  { value: 'json', label: 'JSON' },
-  { value: 'xml', label: 'XML' },
-  { value: 'yaml', label: 'YAML' },
-  { value: 'csv', label: 'CSV' },
-  { value: 'text', label: 'Plain Text' },
-  { value: 'base64', label: 'Base64' },
-  { value: 'hex', label: 'Hexadecimal' },
-  { value: 'binary', label: 'Binary' },
-  { value: 'uri', label: 'URI Encoded' },
-]
+  { value: "text", label: "Plain Text" },
+  { value: "json", label: "JSON" },
+  { value: "xml", label: "XML" },
+  { value: "yaml", label: "YAML" },
+  { value: "csv", label: "CSV" },
+  { value: "base64", label: "Base64" },
+  { value: "hex", label: "Hexadecimal" },
+  { value: "binary", label: "Binary" },
+  { value: "uri", label: "URI Encoded" },
+];
 
 type IntermediateState = {
-  type: 'primitive' | 'array' | 'object';
+  type: "primitive" | "array" | "object";
   value: any;
 };
 
+const formatByteSize = (bytes: number) => {
+  if (bytes === 0) return "0 Bytes";
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
+};
+
 export default function SideBySideEditor() {
-  const [inputText, setInputText] = useState('')
-  const [outputText, setOutputText] = useState('')
-  const [inputFormat, setInputFormat] = useState('text')
-  const [outputFormat, setOutputFormat] = useState('text')
-  // const [intermediateState, setIntermediateState] = useState<IntermediateState | null>(null)
+  const [inputText, setInputText] = useState("");
+  const [outputText, setOutputText] = useState("");
+  const [inputFormat, setInputFormat] = useState("text");
+  const [outputFormat, setOutputFormat] = useState("text");
+  const [intermediateState, setIntermediateState] =
+    useState<IntermediateState | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
-  const parseInput = useCallback((text: string, format: string): IntermediateState => {
-    try {
-      let parsed: any;
-      switch (format) {
-        case 'json':
-          parsed = JSON.parse(text);
-          break;
-        case 'xml':
-          parsed = new XMLParser({
-            ignoreAttributes: false,
-            attributeNamePrefix: "@_",
-            textNodeName: "#text",
-          }).parse(text);
-          break;
-        case 'yaml':
-          parsed = yaml.load(text);
-          break;
-        case 'csv':
-          parsed = Papa.parse(text, { header: true }).data;
-          break;
-        case 'base64':
-          const decodedText = atob(text);
-          try {
-            parsed = JSON.parse(decodedText);
-          } catch {
-            parsed = decodedText;
-          }
-          break;
-        case 'hex':
-          parsed = text.match(/.{1,2}/g)?.map(byte => String.fromCharCode(parseInt(byte, 16))).join('');
-          try {
-            parsed = JSON.parse(parsed);
-          } catch {
-            // If it's not valid JSON, keep it as a string
-          }
-          break;
-        case 'binary':
-          parsed = text.replace(/\s/g, '').match(/.{1,8}/g)?.map(byte => String.fromCharCode(parseInt(byte, 2))).join('');
-          try {
-            parsed = JSON.parse(parsed);
-          } catch {
-            // If it's not valid JSON, keep it as a string
-          }
-          break;
-        case 'uri':
-          parsed = decodeURIComponent(text);
-          try {
-            parsed = JSON.parse(parsed);
-          } catch {
-            // If it's not valid JSON, keep it as a string
-          }
-          break;
-        default:
-          parsed = text;
-      }
+  const parseInput = useCallback(
+    (text: string, format: string): IntermediateState => {
+      try {
+        let parsed: any;
+        switch (format) {
+          case "json":
+            parsed = JSON.parse(text);
+            break;
+          case "xml":
+            parsed = new XMLParser({
+              ignoreAttributes: false,
+              attributeNamePrefix: "@_",
+              textNodeName: "#text",
+            }).parse(text);
+            break;
+          case "yaml":
+            parsed = yaml.load(text);
+            break;
+          case "csv":
+            parsed = Papa.parse(text, { header: true }).data;
+            break;
+          case "base64":
+            const decodedText = atob(text);
+            try {
+              parsed = JSON.parse(decodedText);
+            } catch {
+              parsed = decodedText;
+            }
+            break;
+          case "hex":
+            parsed = text
+              .match(/.{1,2}/g)
+              ?.map((byte) => String.fromCharCode(parseInt(byte, 16)))
+              .join("");
+            try {
+              parsed = JSON.parse(parsed);
+            } catch {
+              // If it's not valid JSON, keep it as a string
+            }
+            break;
+          case "binary":
+            parsed = text
+              .replace(/\s/g, "")
+              .match(/.{1,8}/g)
+              ?.map((byte) => String.fromCharCode(parseInt(byte, 2)))
+              .join("");
+            try {
+              parsed = JSON.parse(parsed);
+            } catch {
+              // If it's not valid JSON, keep it as a string
+            }
+            break;
+          case "uri":
+            parsed = decodeURIComponent(text);
+            try {
+              parsed = JSON.parse(parsed);
+            } catch {
+              // If it's not valid JSON, keep it as a string
+            }
+            break;
+          default:
+            parsed = text;
+        }
 
-      if (Array.isArray(parsed)) {
-        return { type: 'array', value: parsed };
-      } else if (typeof parsed === 'object' && parsed !== null) {
-        return { type: 'object', value: parsed };
-      } else {
-        return { type: 'primitive', value: parsed };
+        if (Array.isArray(parsed)) {
+          return { type: "array", value: parsed };
+        } else if (typeof parsed === "object" && parsed !== null) {
+          return { type: "object", value: parsed };
+        } else {
+          return { type: "primitive", value: parsed };
+        }
+      } catch (error) {
+        console.error(`Error parsing ${format}:`, error);
+        return { type: "primitive", value: `Error: Could not parse ${format}` };
       }
-    } catch (error) {
-      console.error(`Error parsing ${format}:`, error);
-      return { type: 'primitive', value: `Error: Could not parse ${format}` };
-    }
-  }, [])
+    },
+    []
+  );
 
-  const stringifyOutput = useCallback((state: IntermediateState, format: string): string => {
-    try {
-      let result: string;
-      switch (format) {
-        case 'json':
-          result = JSON.stringify(state.value, null, 2);
-          break;
-        case 'xml':
-          const xmlBuilder = new XMLBuilder({
-            ignoreAttributes: false,
-            format: true,
-            attributeNamePrefix: "@_",
-            textNodeName: "#text",
-          });
-          result = xmlBuilder.build(state.type === 'array' ? { root: { item: state.value } } : state.value);
-          break;
-        case 'yaml':
-          result = yaml.dump(state.value);
-          break;
-        case 'csv':
-          result = Papa.unparse(state.type === 'array' ? state.value : [state.value]);
-          break;
-        case 'base64':
-          const stringToEncode = state.type === 'primitive' ? state.value : JSON.stringify(state.value);
-          result = btoa(unescape(encodeURIComponent(stringToEncode)));
-          break;
-        case 'hex':
-          const stringToHex = state.type === 'primitive' ? state.value : JSON.stringify(state.value);
-          result = stringToHex.split('').map((char: string) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
-          break;
-        case 'binary':
-          const stringToBinary = state.type === 'primitive' ? state.value : JSON.stringify(state.value);
-          result = stringToBinary.split('').map((char: string) => char.charCodeAt(0).toString(2).padStart(8, '0')).join(' ');
-          break;
-        case 'uri':
-          const stringToUri = state.type === 'primitive' ? state.value : JSON.stringify(state.value);
-          result = encodeURIComponent(stringToUri);
-          break;
-        default:
-          result = state.type === 'primitive' ? state.value : JSON.stringify(state.value);
+  const stringifyOutput = useCallback(
+    (state: IntermediateState, format: string): string => {
+      try {
+        let result: string;
+        switch (format) {
+          case "json":
+            result = JSON.stringify(state.value, null, 2);
+            break;
+          case "xml":
+            const xmlBuilder = new XMLBuilder({
+              ignoreAttributes: false,
+              format: true,
+              attributeNamePrefix: "@_",
+              textNodeName: "#text",
+            });
+            result = xmlBuilder.build(
+              state.type === "array"
+                ? { root: { item: state.value } }
+                : state.value
+            );
+            break;
+          case "yaml":
+            result = yaml.dump(state.value);
+            break;
+          case "csv":
+            result = Papa.unparse(
+              state.type === "array" ? state.value : [state.value]
+            );
+            break;
+          case "base64":
+            const stringToEncode =
+              state.type === "primitive"
+                ? state.value
+                : JSON.stringify(state.value);
+            result = btoa(unescape(encodeURIComponent(stringToEncode)));
+            break;
+          case "hex":
+            const stringToHex =
+              state.type === "primitive"
+                ? state.value
+                : JSON.stringify(state.value);
+            result = stringToHex
+              .split("")
+              .map((char: string) =>
+                char.charCodeAt(0).toString(16).padStart(2, "0")
+              )
+              .join("");
+            break;
+          case "binary":
+            const stringToBinary =
+              state.type === "primitive"
+                ? state.value
+                : JSON.stringify(state.value);
+            result = stringToBinary
+              .split("")
+              .map((char: string) =>
+                char.charCodeAt(0).toString(2).padStart(8, "0")
+              )
+              .join(" ");
+            break;
+          case "uri":
+            const stringToUri =
+              state.type === "primitive"
+                ? state.value
+                : JSON.stringify(state.value);
+            result = encodeURIComponent(stringToUri);
+            break;
+          default:
+            result =
+              state.type === "primitive"
+                ? state.value
+                : JSON.stringify(state.value);
+        }
+        return result;
+      } catch (error) {
+        console.error(`Error stringifying to ${format}:`, error);
+        return `Error: Could not convert to ${format}`;
       }
-      return result;
-    } catch (error) {
-      console.error(`Error stringifying to ${format}:`, error);
-      return `Error: Could not convert to ${format}`;
-    }
-  }, [])
+    },
+    []
+  );
 
   const handleConvert = useCallback(() => {
     const newIntermediateState = parseInput(inputText, inputFormat);
-    // setIntermediateState(newIntermediateState);
+    setIntermediateState(newIntermediateState);
     const convertedOutput = stringifyOutput(newIntermediateState, outputFormat);
     setOutputText(convertedOutput);
-  }, [inputText, inputFormat, outputFormat, parseInput, stringifyOutput])
+  }, [inputText, inputFormat, outputFormat, parseInput, stringifyOutput]);
 
   useEffect(() => {
     handleConvert();
-  }, [handleConvert])
+  }, [handleConvert]);
 
   const handleSwap = () => {
     setInputText(outputText);
     setOutputText(inputText);
     setInputFormat(outputFormat);
     setOutputFormat(inputFormat);
-    // setIntermediateState(null);
-  }
+    setIntermediateState(null);
+  };
+
+  const handleMinify = () => {
+    if (intermediateState) {
+      const minified = JSON.stringify(intermediateState.value);
+      setOutputText(minified);
+    }
+  };
+
+  const handleBeautify = () => {
+    if (intermediateState) {
+      const beautified = JSON.stringify(intermediateState.value, null, 2);
+      setOutputText(beautified);
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    navigator.clipboard
+      .writeText(outputText)
+      .then(() => {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 1500);
+      })
+      .catch((err) => {
+        console.error("Failed to copy text: ", err);
+      });
+  };
 
   return (
-    <div className="flex flex-col h-screen">
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex space-x-2">
-          <Button onClick={handleSwap}><WidthIcon className="mr-2 h-4 w-4" /> Swap</Button>
-        </div>
-      </div>
-      <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-col h-full justify-center mt-4">
+      <div className="flex flex-1 min-h-0">
         <EditorPane
           value={inputText}
           onChange={setInputText}
@@ -182,29 +263,52 @@ export default function SideBySideEditor() {
           onFormatChange={setInputFormat}
           readOnly={false}
         />
+        <div className="flex items-center mx-4">
+          <Button variant="secondary" onClick={handleSwap}>
+            <ArrowLeftRight className="h-4 w-4" />
+          </Button>
+        </div>
         <EditorPane
           value={outputText}
           onChange={() => {}}
           format={outputFormat}
           onFormatChange={setOutputFormat}
           readOnly={true}
+          floatingButtons={
+            <div className="absolute top-2 right-4 flex space-x-2">
+              <Button size="sm" variant="secondary" className="hover:bg-primary" onClick={handleCopyToClipboard}>
+                {copySuccess ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+          }
         />
       </div>
     </div>
-  )
+  );
 }
 
 interface EditorPaneProps {
-  value: string
-  onChange: (value: string) => void
-  format: string
-  onFormatChange: (value: string) => void
-  readOnly: boolean
+  value: string;
+  onChange: (value: string) => void;
+  format: string;
+  onFormatChange: (value: string) => void;
+  readOnly: boolean;
+  floatingButtons?: React.ReactNode;
 }
 
-function EditorPane({ value, onChange, format, onFormatChange, readOnly }: EditorPaneProps) {
+function EditorPane({
+  value,
+  onChange,
+  format,
+  onFormatChange,
+  readOnly,
+  floatingButtons,
+}: EditorPaneProps) {
+  const charCount = value.length;
+  const byteSize = new Blob([value]).size;
+
   return (
-    <div className="flex-1 flex flex-col border-r last:border-r-0">
+    <div className="flex-1 flex flex-col relative min-w-0">
       <div className="p-2 border-b">
         <Select value={format} onValueChange={onFormatChange}>
           <SelectTrigger>
@@ -219,14 +323,22 @@ function EditorPane({ value, onChange, format, onFormatChange, readOnly }: Edito
           </SelectContent>
         </Select>
       </div>
-      <Textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="flex-1 resize-none rounded-none border-0 font-mono"
-        placeholder={readOnly ? "Output will appear here..." : "Enter your text here..."}
-        readOnly={readOnly}
-      />
+      <div className="flex-1 relative min-h-0">
+        <Textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-full w-full resize-none rounded-none border-0 font-mono
+            scrollbar-thin scrollbar-thumb-primary scrollbar-track-background"
+          placeholder={
+            readOnly ? "Output will appear here..." : "Enter your text here..."
+          }
+          readOnly={readOnly}
+        />
+        {floatingButtons}
+      </div>
+      <div className="p-2 text-sm text-gray-500">
+        Characters: {charCount} | {formatByteSize(byteSize)}
+      </div>
     </div>
-  )
+  );
 }
-
