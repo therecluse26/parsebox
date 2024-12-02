@@ -39,8 +39,6 @@ const formatByteSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
 };
 
-
-
 export default function SideBySideEditor() {
   const [inputText, setInputText] = useState("");
   const [outputText, setOutputText] = useState("");
@@ -388,7 +386,7 @@ function EditorPane({
   const byteSize = new Blob([value]).size;
 
   return (
-    <div className="flex-1 flex flex-col relative min-w-0">
+    <div className="flex-1 flex flex-col relative min-w-0 mb-4">
       <div className="p-2 border-b">
         <Select value={format} onValueChange={onFormatChange}>
           <SelectTrigger>
