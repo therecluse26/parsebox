@@ -15,6 +15,7 @@ import yaml from "js-yaml";
 declare const Papa: any;
 
 const formatOptions = [
+  { value: "auto", label: "Auto Detect" },
   { value: "text", label: "Plain Text" },
   { value: "json", label: "JSON" },
   { value: "xml", label: "XML" },
@@ -38,20 +39,96 @@ const formatByteSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
 };
 
+
+
 export default function SideBySideEditor() {
   const [inputText, setInputText] = useState("");
   const [outputText, setOutputText] = useState("");
-  const [inputFormat, setInputFormat] = useState("text");
+  const [inputFormat, setInputFormat] = useState("auto");
   const [outputFormat, setOutputFormat] = useState("text");
   const [intermediateState, setIntermediateState] =
     useState<IntermediateState | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
+
+  const detectFormat = (text: string): string => {
+    // Try JSON
+    try {
+      JSON.parse(text);
+      setDetectedFormat("JSON");
+      return "json";
+    } catch {}
+  
+    // Try XML
+    try {
+      new XMLParser().parse(text);
+      if (text.trim().startsWith('<') && text.trim().endsWith('>')) {
+        setDetectedFormat("XML");
+        return "xml";
+      }
+    } catch {}
+  
+    // Try YAML
+    try {
+      yaml.load(text);
+      if (text.includes(':') && !text.includes('{') && !text.includes('[')) {
+        setDetectedFormat("YAML");
+        return "yaml";
+      }
+    } catch {}
+  
+    // Try CSV
+    try {
+      const result = Papa.parse(text, { header: true });
+      if (result.data.length > 0 && Object.keys(result.data[0]).length > 1) {
+        setDetectedFormat("CSV");
+        return "csv";
+      }
+    } catch {}
+  
+    // Try Base64
+    try {
+      const decoded = atob(text);
+      if (text === btoa(decoded)) {
+        setDetectedFormat("Base64")
+        return "base64";
+      }
+    } catch {}
+  
+    // Try Hex
+    if (/^[0-9A-Fa-f\s]+$/.test(text)) {
+      setDetectedFormat("Hexadecimal");
+      return "hex";
+    }
+  
+    // Try Binary
+    if (/^[01\s]+$/.test(text)) {
+      return "binary";
+    }
+  
+    // Try URI
+    try {
+      const decoded = decodeURIComponent(text);
+      if (text !== decoded && text.includes('%')) {
+        setDetectedFormat("URI Encoded");
+        return "uri";
+      }
+    } catch {}
+  
+    setDetectedFormat("Plain Text");
+    return "text";
+  };
 
   const parseInput = useCallback(
     (text: string, format: string): IntermediateState => {
       try {
+        let actualFormat = format;
+        if (format === "auto") {
+          actualFormat = detectFormat(text);
+        }
+
         let parsed: any;
-        switch (format) {
+        switch (actualFormat) {
           case "json":
             parsed = JSON.parse(text);
             break;
@@ -262,6 +339,7 @@ export default function SideBySideEditor() {
           format={inputFormat}
           onFormatChange={setInputFormat}
           readOnly={false}
+          detectedFormat={detectedFormat}
         />
         <div className="flex items-center mx-4">
           <Button variant="secondary" onClick={handleSwap}>
@@ -294,6 +372,7 @@ interface EditorPaneProps {
   onFormatChange: (value: string) => void;
   readOnly: boolean;
   floatingButtons?: React.ReactNode;
+  detectedFormat?: string|null
 }
 
 function EditorPane({
@@ -303,6 +382,7 @@ function EditorPane({
   onFormatChange,
   readOnly,
   floatingButtons,
+  detectedFormat
 }: EditorPaneProps) {
   const charCount = value.length;
   const byteSize = new Blob([value]).size;
@@ -317,7 +397,7 @@ function EditorPane({
           <SelectContent>
             {formatOptions.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.label}
+                {option.label} {option.value === 'auto' && value && detectedFormat && '(' + (detectedFormat) + ')'}
               </SelectItem>
             ))}
           </SelectContent>
