@@ -62,6 +62,7 @@ export default function SideBySideEditor() {
     useState<IntermediateState | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
+  const [isOutputFormatManuallySet, setIsOutputFormatManuallySet] = useState(false);
 
   const detectFormat = (text: string): string => {
     // Try JSON
@@ -115,6 +116,7 @@ export default function SideBySideEditor() {
   
     // Try Binary
     if (/^[01\s]+$/.test(text)) {
+      setDetectedFormat("Binary");
       return "binary";
     }
   
@@ -137,6 +139,10 @@ export default function SideBySideEditor() {
         let actualFormat = format;
         if (format === "auto") {
           actualFormat = detectFormat(text);
+          // Auto-sync output format if not manually set
+          if (!isOutputFormatManuallySet) {
+            setOutputFormat(actualFormat);
+          }
         }
 
         let parsed: any;
@@ -212,7 +218,7 @@ export default function SideBySideEditor() {
         return { type: "primitive", value: `Error: Could not parse ${format}` };
       }
     },
-    []
+    [isOutputFormatManuallySet]
   );
 
   const stringifyOutput = useCallback(
@@ -297,6 +303,19 @@ export default function SideBySideEditor() {
     []
   );
 
+  const handleOutputFormatChange = (newFormat: string) => {
+    setOutputFormat(newFormat);
+    setIsOutputFormatManuallySet(true);
+  };
+
+  const handleInputFormatChange = (newFormat: string) => {
+    setInputFormat(newFormat);
+    // Reset the manual flag when switching to auto mode
+    if (newFormat === "auto") {
+      setIsOutputFormatManuallySet(false);
+    }
+  };
+
   const handleConvert = useCallback(() => {
     const newIntermediateState = parseInput(inputText, inputFormat);
     setIntermediateState(newIntermediateState);
@@ -311,9 +330,17 @@ export default function SideBySideEditor() {
   const handleSwap = () => {
     setInputText(outputText);
     setOutputText(inputText);
-    setInputFormat(outputFormat);
-    setOutputFormat(inputFormat);
+    const newInputFormat = outputFormat;
+    const newOutputFormat = inputFormat;
+    setInputFormat(newInputFormat);
+    setOutputFormat(newOutputFormat);
     setIntermediateState(null);
+    // Update manual flag based on new input format
+    if (newInputFormat === "auto") {
+      setIsOutputFormatManuallySet(false);
+    } else {
+      setIsOutputFormatManuallySet(true);
+    }
   };
 
   const handleMinify = () => {
@@ -349,7 +376,7 @@ export default function SideBySideEditor() {
           value={inputText}
           onChange={setInputText}
           format={inputFormat}
-          onFormatChange={setInputFormat}
+          onFormatChange={handleInputFormatChange}
           readOnly={false}
           detectedFormat={detectedFormat}
         />
@@ -362,7 +389,7 @@ export default function SideBySideEditor() {
           value={outputText}
           onChange={() => {}}
           format={outputFormat}
-          onFormatChange={setOutputFormat}
+          onFormatChange={handleOutputFormatChange}
           readOnly={true}
           floatingButtons={
             <div className="absolute top-2 right-4 flex space-x-2">
