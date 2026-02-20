@@ -12,6 +12,12 @@ import { Button } from "@/components/ui/button";
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
 import yaml from "js-yaml";
 import { encode as toonEncode, decode as toonDecode } from '@toon-format/toon';
+import JSON5 from 'json5';
+import TOML from '@ltd/j-toml';
+import ini from 'ini';
+import { encode as msgpackEncode, decode as msgpackDecode } from '@msgpack/msgpack';
+import { parse as dotenvParse } from 'dotenv';
+import qs from 'qs';
 import { SyntaxHighlightedEditor } from './SyntaxHighlightedEditor';
 // @ts-ignore
 declare const Papa: any;
@@ -20,14 +26,22 @@ const formatOptions = [
   { value: "auto", label: "Auto Detect" },
   { value: "text", label: "Plain Text" },
   { value: "json", label: "JSON" },
+  { value: "json5", label: "JSON5" },
   { value: "xml", label: "XML" },
   { value: "yaml", label: "YAML" },
+  { value: "toml", label: "TOML" },
   { value: "toon", label: "TOON" },
+  { value: "ini", label: "INI" },
+  { value: "dotenv", label: "dotenv" },
   { value: "csv", label: "CSV" },
+  { value: "tsv", label: "TSV" },
+  { value: "jsonl", label: "JSONL" },
+  { value: "msgpack", label: "MessagePack" },
   { value: "base64", label: "Base64" },
   { value: "hex", label: "Hexadecimal" },
   { value: "binary", label: "Binary" },
   { value: "uri", label: "URI Encoded" },
+  { value: "querystring", label: "Query String" },
 ];
 
 type IntermediateState = {
@@ -43,15 +57,19 @@ const formatByteSize = (bytes: number) => {
 };
 
 const shouldHighlight = (format: string): boolean => {
-  return ['json', 'xml', 'yaml', 'toon'].includes(format);
+  return ['json', 'json5', 'xml', 'yaml', 'toml', 'toon', 'ini', 'jsonl'].includes(format);
 };
 
 const getHighlightLanguage = (format: string): string => {
   const languageMap: Record<string, string> = {
     'json': 'json',
+    'json5': 'json',
     'xml': 'xml',
     'yaml': 'yaml',
+    'toml': 'toml',
     'toon': 'yaml',
+    'ini': 'ini',
+    'jsonl': 'json',
   };
   return languageMap[format] || 'plaintext';
 };
@@ -74,6 +92,16 @@ export default function SideBySideEditor() {
       setDetectedFormat("JSON");
       return "json";
     } catch {}
+
+    // Try JSON5 (JSON with comments/trailing commas)
+    try {
+      JSON5.parse(text);
+      // Check if it has JSON5-specific features (comments, trailing commas, unquoted keys)
+      if (text.includes('//') || text.includes('/*') || /,\s*[}\]]/.test(text)) {
+        setDetectedFormat("JSON5");
+        return "json5";
+      }
+    } catch {}
   
     // Try XML
     try {
@@ -84,6 +112,16 @@ export default function SideBySideEditor() {
       }
     } catch {}
   
+    // Try TOML
+    try {
+      TOML.parse(text);
+      // TOML typically has [section] headers or key = value
+      if (/^\[[\w.]+\]/m.test(text) || /^\w+\s*=/.test(text)) {
+        setDetectedFormat("TOML");
+        return "toml";
+      }
+    } catch {}
+
     // Try YAML
     try {
       yaml.load(text);
@@ -111,6 +149,44 @@ export default function SideBySideEditor() {
       }
     } catch {}
 
+    // Try INI
+    try {
+      ini.parse(text);
+      // INI has [section] headers or key=value (no spaces around =)
+      if (/^\[[\w\s]+\]/m.test(text) && /^\w+=/.test(text)) {
+        setDetectedFormat("INI");
+        return "ini";
+      }
+    } catch {}
+
+    // Try dotenv
+    try {
+      dotenvParse(Buffer.from(text));
+      // dotenv typically has KEY=value format (often uppercase keys)
+      if (/^[A-Z_]+=/.test(text) || text.split('\n').every(line =>
+        line.trim() === '' || line.startsWith('#') || /^\w+=/.test(line)
+      )) {
+        setDetectedFormat("dotenv");
+        return "dotenv";
+      }
+    } catch {}
+
+    // Try JSONL
+    try {
+      const lines = text.trim().split('\n');
+      if (lines.length > 1 && lines.every(line => {
+        try {
+          JSON.parse(line.trim());
+          return true;
+        } catch {
+          return false;
+        }
+      })) {
+        setDetectedFormat("JSONL");
+        return "jsonl";
+      }
+    } catch {}
+
     // Try CSV
     try {
       const result = Papa.parse(text, { header: true });
@@ -119,7 +195,27 @@ export default function SideBySideEditor() {
         return "csv";
       }
     } catch {}
+
+    // Try TSV
+    try {
+      const result = Papa.parse(text, { header: true, delimiter: "\t" });
+      if (result.data.length > 0 && Object.keys(result.data[0]).length > 1 && text.includes('\t')) {
+        setDetectedFormat("TSV");
+        return "tsv";
+      }
+    } catch {}
   
+    // Try MessagePack (base64-encoded binary)
+    try {
+      const msgpackBinary = Uint8Array.from(atob(text), c => c.charCodeAt(0));
+      msgpackDecode(msgpackBinary);
+      // If it decodes successfully and looks like base64, it's MessagePack
+      if (/^[A-Za-z0-9+/]+=*$/.test(text.trim())) {
+        setDetectedFormat("MessagePack");
+        return "msgpack";
+      }
+    } catch {}
+
     // Try Base64
     try {
       const decoded = atob(text);
@@ -149,7 +245,18 @@ export default function SideBySideEditor() {
         return "uri";
       }
     } catch {}
-  
+
+    // Try Query String
+    try {
+      const parsed = qs.parse(text);
+      // Check if it looks like a query string (key=value&key2=value2)
+      if (typeof parsed === 'object' && Object.keys(parsed).length > 0 &&
+          (text.includes('=') && (text.includes('&') || !text.includes(' ')))) {
+        setDetectedFormat("Query String");
+        return "querystring";
+      }
+    } catch {}
+
     setDetectedFormat("Plain Text");
     return "text";
   };
@@ -171,6 +278,9 @@ export default function SideBySideEditor() {
           case "json":
             parsed = JSON.parse(text);
             break;
+          case "json5":
+            parsed = JSON5.parse(text);
+            break;
           case "xml":
             parsed = new XMLParser({
               ignoreAttributes: false,
@@ -181,11 +291,35 @@ export default function SideBySideEditor() {
           case "yaml":
             parsed = yaml.load(text);
             break;
+          case "toml":
+            parsed = TOML.parse(text);
+            break;
           case "toon":
             parsed = toonDecode(text);
             break;
+          case "ini":
+            parsed = ini.parse(text);
+            break;
+          case "dotenv":
+            parsed = dotenvParse(Buffer.from(text));
+            break;
           case "csv":
             parsed = Papa.parse(text, { header: true }).data;
+            break;
+          case "tsv":
+            parsed = Papa.parse(text, { header: true, delimiter: "\t" }).data;
+            break;
+          case "jsonl":
+            parsed = text
+              .trim()
+              .split("\n")
+              .filter((line) => line.trim())
+              .map((line) => JSON.parse(line));
+            break;
+          case "msgpack":
+            // Decode base64 to binary, then decode MessagePack
+            const msgpackBinary = Uint8Array.from(atob(text), c => c.charCodeAt(0));
+            parsed = msgpackDecode(msgpackBinary);
             break;
           case "base64":
             const decodedText = atob(text);
@@ -226,6 +360,9 @@ export default function SideBySideEditor() {
               // If it's not valid JSON, keep it as a string
             }
             break;
+          case "querystring":
+            parsed = qs.parse(text);
+            break;
           default:
             parsed = text;
         }
@@ -253,6 +390,9 @@ export default function SideBySideEditor() {
           case "json":
             result = JSON.stringify(state.value, null, 2);
             break;
+          case "json5":
+            result = JSON5.stringify(state.value, null, 2);
+            break;
           case "xml":
             const xmlBuilder = new XMLBuilder({
               ignoreAttributes: false,
@@ -269,13 +409,44 @@ export default function SideBySideEditor() {
           case "yaml":
             result = yaml.dump(state.value);
             break;
+          case "toml":
+            result = TOML.stringify(state.value);
+            break;
           case "toon":
             result = toonEncode(state.value);
+            break;
+          case "ini":
+            result = ini.stringify(state.value);
+            break;
+          case "dotenv":
+            // Manually stringify to dotenv format (key=value)
+            if (state.type === "object") {
+              result = Object.entries(state.value)
+                .map(([key, value]) => `${key}=${value}`)
+                .join("\n");
+            } else {
+              result = String(state.value);
+            }
             break;
           case "csv":
             result = Papa.unparse(
               state.type === "array" ? state.value : [state.value]
             );
+            break;
+          case "tsv":
+            result = Papa.unparse(
+              state.type === "array" ? state.value : [state.value],
+              { delimiter: "\t" }
+            );
+            break;
+          case "jsonl":
+            const jsonlArray = state.type === "array" ? state.value : [state.value];
+            result = jsonlArray.map((item: any) => JSON.stringify(item)).join("\n");
+            break;
+          case "msgpack":
+            // Encode to MessagePack binary, then convert to base64
+            const msgpackEncoded = msgpackEncode(state.value);
+            result = btoa(String.fromCharCode(...msgpackEncoded));
             break;
           case "base64":
             const stringToEncode =
@@ -314,6 +485,9 @@ export default function SideBySideEditor() {
                 ? state.value
                 : JSON.stringify(state.value);
             result = encodeURIComponent(stringToUri);
+            break;
+          case "querystring":
+            result = qs.stringify(state.value);
             break;
           default:
             result =
