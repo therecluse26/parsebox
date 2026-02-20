@@ -30,7 +30,8 @@ export default defineConfig(({ command }) => {
         },
       },
       commonjsOptions: {
-        include: [/papaparse/, /node_modules/]
+        include: [/papaparse/, /node_modules/],
+        transformMixedEsModules: true
       }
     },
     optimizeDeps: {

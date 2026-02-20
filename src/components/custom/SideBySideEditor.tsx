@@ -11,6 +11,7 @@ import { ArrowLeftRight, Minimize2, Maximize2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
 import yaml from "js-yaml";
+import { SyntaxHighlightedEditor } from './SyntaxHighlightedEditor';
 // @ts-ignore
 declare const Papa: any;
 
@@ -37,6 +38,19 @@ const formatByteSize = (bytes: number) => {
   const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
+};
+
+const shouldHighlight = (format: string): boolean => {
+  return ['json', 'xml', 'yaml'].includes(format);
+};
+
+const getHighlightLanguage = (format: string): string => {
+  const languageMap: Record<string, string> = {
+    'json': 'json',
+    'xml': 'xml',
+    'yaml': 'yaml',
+  };
+  return languageMap[format] || 'plaintext';
 };
 
 export default function SideBySideEditor() {
@@ -386,7 +400,7 @@ function EditorPane({
   const byteSize = new Blob([value]).size;
 
   return (
-    <div className="flex-1 flex flex-col relative min-w-0 mb-4">
+    <div className="flex-1 flex flex-col relative min-w-0">
       <div className="p-2 border-b">
         <Select value={format} onValueChange={onFormatChange}>
           <SelectTrigger>
@@ -402,16 +416,27 @@ function EditorPane({
         </Select>
       </div>
       <div className="flex-1 relative min-h-0">
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-full w-full resize-none rounded-none border-0 font-mono
-            scrollbar-thin scrollbar-thumb-primary scrollbar-track-background"
-          placeholder={
-            readOnly ? "Output will appear here..." : "Enter your text here..."
-          }
-          readOnly={readOnly}
-        />
+        {shouldHighlight(format) && readOnly ? (
+          <SyntaxHighlightedEditor
+            value={value}
+            onChange={onChange}
+            language={getHighlightLanguage(format)}
+            readOnly={readOnly}
+            className="rounded-none border-0"
+            placeholder={readOnly ? "Output will appear here..." : "Enter your text here..."}
+          />
+        ) : (
+          <Textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-full w-full resize-none rounded-none border-0 font-mono
+              scrollbar-thin scrollbar-thumb-primary scrollbar-track-background"
+            placeholder={
+              readOnly ? "Output will appear here..." : "Enter your text here..."
+            }
+            readOnly={readOnly}
+          />
+        )}
         {floatingButtons}
       </div>
       <div className="p-2 text-sm text-gray-500">

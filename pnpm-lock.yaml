@@ -59,6 +59,9 @@ importers:
       fast-xml-parser:
         specifier: ^4.5.0
         version: 4.5.0
+      highlight.js:
+        specifier: ^11.9.0
+        version: 11.11.1
       js-yaml:
         specifier: ^4.1.0
         version: 4.1.0
@@ -93,6 +96,9 @@ importers:
         specifier: ^5.0.0-rc.2
         version: 5.0.1(@types/react@18.3.12)(react@18.3.1)
     devDependencies:
+      '@types/highlight.js':
+        specifier: ^10.1.0
+        version: 10.1.0
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -764,6 +770,10 @@ packages:
   '@radix-ui/rect@1.1.0':
     resolution: {integrity: sha512-A9+lCBZoaMJlVKcRBz2YByCG+Cp2t6nAnMnNba+XiWxnj6r4JUFqfsgwocMBZU9LPtdxC6wB56ySYpc7LQIoJg==}
 
+  '@types/highlight.js@10.1.0':
+    resolution: {integrity: sha512-77hF2dGBsOgnvZll1vymYiNUtqJ8cJfXPD6GG/2M0aLRc29PkvB7Au6sIDjIEFcSICBhCh2+Pyq6WSRS7LUm6A==}
+    deprecated: This is a stub types definition. highlight.js provides its own type definitions, so you do not need this installed.
+
   '@types/js-yaml@4.0.9':
     resolution: {integrity: sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg==}
 
@@ -1121,6 +1131,10 @@ packages:
   hasown@2.0.2:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
+
+  highlight.js@11.11.1:
+    resolution: {integrity: sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==}
+    engines: {node: '>=12.0.0'}
 
   invariant@2.2.4:
     resolution: {integrity: sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA==}
@@ -2282,6 +2296,10 @@ snapshots:
 
   '@radix-ui/rect@1.1.0': {}
 
+  '@types/highlight.js@10.1.0':
+    dependencies:
+      highlight.js: 11.11.1
+
   '@types/js-yaml@4.0.9': {}
 
   '@types/lodash@4.17.13': {}
@@ -2583,6 +2601,8 @@ snapshots:
   hasown@2.0.2:
     dependencies:
       function-bind: 1.1.2
+
+  highlight.js@11.11.1: {}
 
   invariant@2.2.4:
     dependencies:
