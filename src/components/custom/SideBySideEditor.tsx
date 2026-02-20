@@ -11,6 +11,7 @@ import { ArrowLeftRight, Minimize2, Maximize2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
 import yaml from "js-yaml";
+import { SyntaxHighlightedEditor } from './SyntaxHighlightedEditor';
 // @ts-ignore
 declare const Papa: any;
 
@@ -39,6 +40,19 @@ const formatByteSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
 };
 
+const shouldHighlight = (format: string): boolean => {
+  return ['json', 'xml', 'yaml'].includes(format);
+};
+
+const getHighlightLanguage = (format: string): string => {
+  const languageMap: Record<string, string> = {
+    'json': 'json',
+    'xml': 'xml',
+    'yaml': 'yaml',
+  };
+  return languageMap[format] || 'plaintext';
+};
+
 export default function SideBySideEditor() {
   const [inputText, setInputText] = useState("");
   const [outputText, setOutputText] = useState("");
@@ -48,6 +62,7 @@ export default function SideBySideEditor() {
     useState<IntermediateState | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
+  const [isOutputFormatManuallySet, setIsOutputFormatManuallySet] = useState(false);
 
   const detectFormat = (text: string): string => {
     // Try JSON
@@ -101,6 +116,7 @@ export default function SideBySideEditor() {
   
     // Try Binary
     if (/^[01\s]+$/.test(text)) {
+      setDetectedFormat("Binary");
       return "binary";
     }
   
@@ -123,6 +139,10 @@ export default function SideBySideEditor() {
         let actualFormat = format;
         if (format === "auto") {
           actualFormat = detectFormat(text);
+          // Auto-sync output format if not manually set
+          if (!isOutputFormatManuallySet) {
+            setOutputFormat(actualFormat);
+          }
         }
 
         let parsed: any;
@@ -198,7 +218,7 @@ export default function SideBySideEditor() {
         return { type: "primitive", value: `Error: Could not parse ${format}` };
       }
     },
-    []
+    [isOutputFormatManuallySet]
   );
 
   const stringifyOutput = useCallback(
@@ -283,6 +303,19 @@ export default function SideBySideEditor() {
     []
   );
 
+  const handleOutputFormatChange = (newFormat: string) => {
+    setOutputFormat(newFormat);
+    setIsOutputFormatManuallySet(true);
+  };
+
+  const handleInputFormatChange = (newFormat: string) => {
+    setInputFormat(newFormat);
+    // Reset the manual flag when switching to auto mode
+    if (newFormat === "auto") {
+      setIsOutputFormatManuallySet(false);
+    }
+  };
+
   const handleConvert = useCallback(() => {
     const newIntermediateState = parseInput(inputText, inputFormat);
     setIntermediateState(newIntermediateState);
@@ -297,9 +330,17 @@ export default function SideBySideEditor() {
   const handleSwap = () => {
     setInputText(outputText);
     setOutputText(inputText);
-    setInputFormat(outputFormat);
-    setOutputFormat(inputFormat);
+    const newInputFormat = outputFormat;
+    const newOutputFormat = inputFormat;
+    setInputFormat(newInputFormat);
+    setOutputFormat(newOutputFormat);
     setIntermediateState(null);
+    // Update manual flag based on new input format
+    if (newInputFormat === "auto") {
+      setIsOutputFormatManuallySet(false);
+    } else {
+      setIsOutputFormatManuallySet(true);
+    }
   };
 
   const handleMinify = () => {
@@ -335,7 +376,7 @@ export default function SideBySideEditor() {
           value={inputText}
           onChange={setInputText}
           format={inputFormat}
-          onFormatChange={setInputFormat}
+          onFormatChange={handleInputFormatChange}
           readOnly={false}
           detectedFormat={detectedFormat}
         />
@@ -348,7 +389,7 @@ export default function SideBySideEditor() {
           value={outputText}
           onChange={() => {}}
           format={outputFormat}
-          onFormatChange={setOutputFormat}
+          onFormatChange={handleOutputFormatChange}
           readOnly={true}
           floatingButtons={
             <div className="absolute top-2 right-4 flex space-x-2">
@@ -386,7 +427,7 @@ function EditorPane({
   const byteSize = new Blob([value]).size;
 
   return (
-    <div className="flex-1 flex flex-col relative min-w-0 mb-4">
+    <div className="flex-1 flex flex-col relative min-w-0">
       <div className="p-2 border-b">
         <Select value={format} onValueChange={onFormatChange}>
           <SelectTrigger>
@@ -402,16 +443,27 @@ function EditorPane({
         </Select>
       </div>
       <div className="flex-1 relative min-h-0">
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-full w-full resize-none rounded-none border-0 font-mono
-            scrollbar-thin scrollbar-thumb-primary scrollbar-track-background"
-          placeholder={
-            readOnly ? "Output will appear here..." : "Enter your text here..."
-          }
-          readOnly={readOnly}
-        />
+        {shouldHighlight(format) && readOnly ? (
+          <SyntaxHighlightedEditor
+            value={value}
+            onChange={onChange}
+            language={getHighlightLanguage(format)}
+            readOnly={readOnly}
+            className="rounded-none border-0"
+            placeholder={readOnly ? "Output will appear here..." : "Enter your text here..."}
+          />
+        ) : (
+          <Textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-full w-full resize-none rounded-none border-0 font-mono
+              scrollbar-thin scrollbar-thumb-primary scrollbar-track-background"
+            placeholder={
+              readOnly ? "Output will appear here..." : "Enter your text here..."
+            }
+            readOnly={readOnly}
+          />
+        )}
         {floatingButtons}
       </div>
       <div className="p-2 text-sm text-gray-500">

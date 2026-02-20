@@ -89,3 +89,49 @@
    border-radius:14px;
    border:3px solid var(--background); /* Match thumb with background */
 }
+
+/* ============================================
+   Highlight.js Syntax Highlighting Styles
+   ============================================ */
+
+/* Override highlight.js defaults to match ParseBox theme */
+.hljs {
+  background: transparent !important;
+  color: hsl(var(--foreground)) !important;
+  padding: 0 !important;
+}
+
+/* Ensure consistent font with textareas */
+.hljs,
+.hljs code {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+               'Liberation Mono', monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Dark theme token colors (override github-dark as needed) */
+.dark .hljs-string {
+  color: #a5d6a7; /* Green for strings */
+}
+
+.dark .hljs-number,
+.dark .hljs-literal,
+.dark .hljs-boolean {
+  color: #ffb74d; /* Orange for numbers/booleans */
+}
+
+.dark .hljs-attr,
+.dark .hljs-name,
+.dark .hljs-title {
+  color: #64b5f6; /* Blue for keys/attributes */
+}
+
+.dark .hljs-punctuation {
+  color: #b0bec5; /* Gray for brackets/commas */
+}
+
+.dark .hljs-keyword,
+.dark .hljs-tag {
+  color: #f06292; /* Pink for keywords/tags */
+}
