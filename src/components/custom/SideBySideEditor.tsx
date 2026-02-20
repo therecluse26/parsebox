@@ -11,6 +11,7 @@ import { ArrowLeftRight, Minimize2, Maximize2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
 import yaml from "js-yaml";
+import { encode as toonEncode, decode as toonDecode } from '@toon-format/toon';
 import { SyntaxHighlightedEditor } from './SyntaxHighlightedEditor';
 // @ts-ignore
 declare const Papa: any;
@@ -21,6 +22,7 @@ const formatOptions = [
   { value: "json", label: "JSON" },
   { value: "xml", label: "XML" },
   { value: "yaml", label: "YAML" },
+  { value: "toon", label: "TOON" },
   { value: "csv", label: "CSV" },
   { value: "base64", label: "Base64" },
   { value: "hex", label: "Hexadecimal" },
@@ -41,7 +43,7 @@ const formatByteSize = (bytes: number) => {
 };
 
 const shouldHighlight = (format: string): boolean => {
-  return ['json', 'xml', 'yaml'].includes(format);
+  return ['json', 'xml', 'yaml', 'toon'].includes(format);
 };
 
 const getHighlightLanguage = (format: string): string => {
@@ -49,6 +51,7 @@ const getHighlightLanguage = (format: string): string => {
     'json': 'json',
     'xml': 'xml',
     'yaml': 'yaml',
+    'toon': 'yaml',
   };
   return languageMap[format] || 'plaintext';
 };
@@ -89,7 +92,25 @@ export default function SideBySideEditor() {
         return "yaml";
       }
     } catch {}
-  
+
+    // Try TOON
+    try {
+      // TOON detection heuristics:
+      // 1. Array length declarations like [N]:
+      // 2. Tabular field declarations like {field1,field2}:
+      const hasToonArraySyntax = /\[\d+\]:/.test(text);
+      const hasToonTableSyntax = /\{[\w,]+\}:/.test(text);
+      const hasIndentation = /^\s+/m.test(text);
+      const hasColonNewlines = text.includes(':\n') || text.includes(':\r\n');
+
+      if ((hasToonArraySyntax || hasToonTableSyntax) && (hasIndentation || hasColonNewlines)) {
+        // Verify it's valid TOON
+        toonDecode(text);
+        setDetectedFormat("TOON");
+        return "toon";
+      }
+    } catch {}
+
     // Try CSV
     try {
       const result = Papa.parse(text, { header: true });
@@ -159,6 +180,9 @@ export default function SideBySideEditor() {
             break;
           case "yaml":
             parsed = yaml.load(text);
+            break;
+          case "toon":
+            parsed = toonDecode(text);
             break;
           case "csv":
             parsed = Papa.parse(text, { header: true }).data;
@@ -244,6 +268,9 @@ export default function SideBySideEditor() {
             break;
           case "yaml":
             result = yaml.dump(state.value);
+            break;
+          case "toon":
+            result = toonEncode(state.value);
             break;
           case "csv":
             result = Papa.unparse(
