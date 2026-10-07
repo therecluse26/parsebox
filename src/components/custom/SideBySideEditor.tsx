@@ -1,11 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeftRight, Minimize2, Maximize2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +13,7 @@ import { parse as dotenvParse } from 'dotenv';
 import qs from 'qs';
 import { SyntaxHighlightedEditor } from './SyntaxHighlightedEditor';
 import { LineGutter } from './LineGutter';
+import { FormatSelect } from './FormatSelect';
 import { formatOptions } from '@/config/formats';
 import { detectFormat as detectInputFormat, TOML_PARSE_OPTIONS } from '@/lib/detectFormat';
 // @ts-ignore
@@ -551,21 +545,12 @@ function EditorPane({
       <div className="flex items-center justify-between gap-3 border-b py-2 pl-3.5 pr-2.5">
         <div className="flex min-w-0 items-center gap-2.5 text-[13px]">
           <span className="text-dim">{side}</span>
-          <Select value={format} onValueChange={onFormatChange}>
-            <SelectTrigger className="h-8 w-auto gap-2 rounded border-input bg-popover px-2.5 text-[13px] lowercase">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="lowercase">
-              {formatOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                  {option.value === "auto" && value && detectedFormat && (
-                    <span className="text-primary"> → {detectedFormat}</span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FormatSelect
+            side={side}
+            value={format}
+            onChange={onFormatChange}
+            detectedFormat={value ? detectedFormat : null}
+          />
         </div>
         {toolbarAction}
       </div>
