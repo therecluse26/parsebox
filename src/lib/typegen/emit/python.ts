@@ -2,14 +2,10 @@ import { modelUses } from "../model.ts";
 import type { Model, TypeRef } from "../model.ts";
 import { safeStart, snakeCase, uniqueIdents } from "../names.ts";
 
-/**
- * Python keywords and BaseModel attributes a field must not shadow.
- * The Python keyword g-l-o-b-a-l is spelled in two parts: vite.config's
- * `define` replaces that word in the build, even inside strings.
- */
+/** Python keywords and BaseModel attributes a field must not shadow */
 const RESERVED = new Set([
   "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif",
-  "else", "except", "finally", "for", "from", ["glo", "bal"].join(""), "if", "import", "in", "is", "lambda", "nonlocal", "not", "or",
+  "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or",
   "pass", "raise", "return", "try", "while", "with", "yield",
   "construct", "copy", "dict", "from_orm", "json", "model_config", "model_fields", "parse_file", "parse_obj",
   "parse_raw", "schema", "schema_json", "update_forward_refs", "validate",

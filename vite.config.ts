@@ -12,10 +12,6 @@ export default defineConfig(({ command }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    define: {
-      // An identifier, not an object: Vite replaces the name as text, and libraries use `global` as a parameter name
-      global: "globalThis",
-    },
     build: {
       minify: "terser",
       terserOptions: {
