@@ -2,6 +2,8 @@ import { forwardRef, useMemo } from "react";
 
 interface Props {
   count: number;
+  /** 1-based line of the parse error, if any */
+  errorLine?: number;
 }
 
 // Line numbers beside an editor; the parent syncs scrollTop with the editor
