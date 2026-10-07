@@ -1,0 +1,20 @@
+{
+  "maxSafe": 9007199254740991,
+  "maxSafePlusOne": 9007199254740992,
+  "maxSafePlusTwo": 9007199254740993,
+  "int64Max": 9223372036854775807,
+  "uint64Max": 18446744073709551615,
+  "longInteger": 123456789012345678901234567890123456789,
+  "negativeZero": -0,
+  "negativeZeroFloat": -0.0,
+  "tinyExponent": 1e-400,
+  "hugeExponent": 1e400,
+  "minDouble": 5e-324,
+  "maxDouble": 1.7976931348623157e308,
+  "longFraction": 0.1000000000000000055511151231257827,
+  "trailingZeros": 1.50000,
+  "upperExponent": 6.022E+23,
+  "manyDigits": 3.14159265358979323846264338327950288419716939937510,
+  "intAsFloat": 1.0,
+  "numericStrings": ["007", "1e3", "0x1F", "NaN", "Infinity", "-0", " 42 "]
+}

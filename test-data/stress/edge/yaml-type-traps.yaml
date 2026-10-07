@@ -1,0 +1,24 @@
+# Values that YAML 1.1 parsers turn into other types
+country: NO
+answer: yes
+off_switch: off
+version: 1.10
+octal_like: 0777
+sexagesimal: 1:30
+date_like: 2026-10-07
+time_like: 2026-10-07T10:00:00Z
+null_tilde: ~
+empty:
+leading_zero_zip: 02134
+dotted_version: 1.2.3
+hex_like: 0x1F
+infinity: .inf
+not_a_number: .NaN
+key with: colon in key
+"quoted: key": value
+list_of_bools: [y, n, on, off, true, false]
+anchor: &shared { a: 1, b: [x, y] }
+alias: *shared
+merged:
+  <<: *shared
+  c: 3

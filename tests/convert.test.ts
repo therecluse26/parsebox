@@ -12,7 +12,8 @@ const testData = path.join(import.meta.dirname, "..", "test-data");
 // Every sample parses with its folder's format and survives a JSON round trip
 for (const format of fs.readdirSync(testData).sort()) {
   const dir = path.join(testData, format);
-  if (!fs.statSync(dir).isDirectory()) continue;
+  // stress/ is grouped by limit, not by format
+  if (format === "stress" || !fs.statSync(dir).isDirectory()) continue;
   for (const file of fs.readdirSync(dir).sort()) {
     test(`test-data/${format}/${file} parses as ${format} and round-trips through JSON`, () => {
       const value = parseText(fs.readFileSync(path.join(dir, file), "utf8"), format);

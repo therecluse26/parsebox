@@ -1,0 +1,20 @@
+{
+  "astral": "𝔘𝔫𝔦𝔠𝔬𝔡𝔢 𝟘𝟙𝟚 🀄 🂡",
+  "zwjEmoji": "👩‍👩‍👧‍👦 🏳️‍🌈 🧑🏽‍💻 👍🏿",
+  "combining": "e\u0301 = é, Z̴̡̛͎̈́a̷̢͚̐l̶̨̛͓g̵̱̈́ő̸̰",
+  "rtl": "مرحبا بالعالم \u200f שלום עולם",
+  "cjk": "日本語 中文 한국어",
+  "zeroWidth": "a\u200bb\u200cc\u200dd\ufeffe",
+  "lineSeparators": "a\u2028b\u2029c",
+  "controlChars": "nul:\u0000 bel:\u0007 esc:\u001b del:\u007f",
+  "loneSurrogates": "high:\ud800 low:\udc00 reversed:\udc00\ud800",
+  "escapedAstral": "\ud83d\ude80",
+  "bidiOverride": "\u202eabc\u202c",
+  "\u0000nulKey": 1,
+  "": "empty key",
+  "  ": "spaces key",
+  "key.with.dots": "dots",
+  "key[with]brackets": "brackets",
+  "key=with&equals": "query characters",
+  "🚀": "emoji key"
+}

@@ -9,7 +9,8 @@ const testData = path.join(import.meta.dirname, "..", "test-data");
 // Every sample in test-data/<format>/ must be detected as <format>
 for (const format of fs.readdirSync(testData).sort()) {
   const dir = path.join(testData, format);
-  if (!fs.statSync(dir).isDirectory()) continue;
+  // stress/ is grouped by limit, not by format
+  if (format === "stress" || !fs.statSync(dir).isDirectory()) continue;
   for (const file of fs.readdirSync(dir).sort()) {
     test(`test-data/${format}/${file} is ${format}`, () => {
       assert.equal(detectFormat(fs.readFileSync(path.join(dir, file), "utf8")), format);

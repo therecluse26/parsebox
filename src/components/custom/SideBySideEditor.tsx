@@ -12,6 +12,7 @@ import { formatLabel, isInputOnly, isOutputOnly } from "@/config/formats";
 import { LIMITS } from "@/config/limits";
 import { countLines, sizeLabel } from "@/lib/convert/measure";
 import { useConversion, useDelayedFlag } from "@/hooks/useConversion";
+import { findLandingPage, sampleFor } from "@/seo/pages";
 
 const formatByteSize = (bytes: number) => {
   if (bytes === 0) return "0 Bytes";
@@ -31,13 +32,15 @@ const skippedNote = (item: string) =>
   item.includes(" (") ? item.replace(" (", " skipped (") : `${item} skipped`;
 
 export default function SideBySideEditor() {
-  const [inputText, setInputText] = useState("");
+  // A landing page such as /json-to-yaml opens with its formats and a sample
+  const [landingPage] = useState(() => findLandingPage(window.location.pathname));
+  const [inputText, setInputText] = useState(() => (landingPage ? sampleFor(landingPage) : ""));
   // True for pasted, dropped or swapped input over LIMITS.largeInputChars: the pane shows a read-only preview
   const [largeInput, setLargeInput] = useState(false);
-  const [inputFormat, setInputFormat] = useState("auto");
-  const [outputFormat, setOutputFormat] = useState("text");
+  const [inputFormat, setInputFormat] = useState(landingPage?.input ?? "auto");
+  const [outputFormat, setOutputFormat] = useState(landingPage?.output ?? "text");
   // False: in auto mode the output format follows the detected format
-  const [isOutputFormatManuallySet, setIsOutputFormatManuallySet] = useState(false);
+  const [isOutputFormatManuallySet, setIsOutputFormatManuallySet] = useState(landingPage !== undefined);
   const [redactSecrets, setRedactSecrets] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const inputRef = useRef<CodeEditorHandle>(null);
