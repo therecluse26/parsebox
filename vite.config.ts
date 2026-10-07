@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 export default defineConfig(({ command }) => {
   return {
     base: "",
+    worker: { format: "es" },
     plugins: [react()],
     resolve: {
       alias: {
