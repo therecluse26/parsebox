@@ -34,9 +34,6 @@ export default defineConfig(({ command }) => {
         transformMixedEsModules: true
       }
     },
-    worker: {
-      format: "es",
-    },
     optimizeDeps: {
       // The worker imports the parsers, so the dev server scans it for dependencies too
       entries: ["index.html", "src/workers/convert.worker.ts"],

@@ -5,6 +5,7 @@ import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
 import ini from "highlight.js/lib/languages/ini";
 import { LIMITS } from "../config/limits.ts";
+import { highlightLanguageFor as typeLanguageFor } from "../lib/typegen/index.ts";
 
 // Only the languages ParseBox writes, so the worker stays small. "ini" also registers the "toml" alias.
 hljs.registerLanguage("json", json);
@@ -23,6 +24,32 @@ const FORMAT_LANGUAGES: Record<string, string> = {
   toml: "toml",
   ini: "ini",
 };
+
+/** Languages for the type outputs; each loads only when its format is first picked */
+const LAZY_LANGUAGES: Record<string, () => Promise<{ default: LanguageFn }>> = {
+  typescript: () => import("highlight.js/lib/languages/typescript"),
+  go: () => import("highlight.js/lib/languages/go"),
+  protobuf: () => import("highlight.js/lib/languages/protobuf"),
+  rust: () => import("highlight.js/lib/languages/rust"),
+  python: () => import("highlight.js/lib/languages/python"),
+  csharp: () => import("highlight.js/lib/languages/csharp"),
+  kotlin: () => import("highlight.js/lib/languages/kotlin"),
+  swift: () => import("highlight.js/lib/languages/swift"),
+  java: () => import("highlight.js/lib/languages/java"),
+};
+
+/** Load the highlight.js language for a type output format, if it has one and is not loaded yet */
+export async function prepareHighlighting(format: string): Promise<void> {
+  if (FORMAT_LANGUAGES[format]) return;
+  const language = typeLanguageFor(format);
+  if (!language) return;
+  if (!hljs.getLanguage(language)) {
+    const load = LAZY_LANGUAGES[language];
+    if (!load) return;
+    hljs.registerLanguage(language, (await load()).default);
+  }
+  FORMAT_LANGUAGES[format] = language;
+}
 
 /**
  * Highlight another output format, for example a type output:
