@@ -1,12 +1,13 @@
 import path from "path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { seoPages } from "./src/seo/vite-plugin.ts";
 
 export default defineConfig(({ command }) => {
   return {
     base: "",
     worker: { format: "es" },
-    plugins: [react()],
+    plugins: [react(), seoPages()],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

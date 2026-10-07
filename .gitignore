@@ -25,3 +25,6 @@ dist-ssr
 
 # Stress-test data made by `npm run stress-data -- --huge`
 test-data/stress/huge
+
+# Cloudflare wrangler local state
+.wrangler
