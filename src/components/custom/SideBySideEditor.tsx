@@ -153,7 +153,7 @@ export default function SideBySideEditor() {
     try {
       ini.parse(text);
       // INI has [section] headers or key=value (no spaces around =)
-      if (/^\[[\w\s]+\]/m.test(text) && /^\w+=/.test(text)) {
+      if (/^\[[^\]\n]+\]/m.test(text) && /^\s*[\w.-]+\s*=/m.test(text)) {
         setDetectedFormat("INI");
         return "ini";
       }
@@ -161,7 +161,7 @@ export default function SideBySideEditor() {
 
     // Try dotenv
     try {
-      dotenvParse(Buffer.from(text));
+      dotenvParse(text);
       // dotenv typically has KEY=value format (often uppercase keys)
       if (/^[A-Z_]+=/.test(text) || text.split('\n').every(line =>
         line.trim() === '' || line.startsWith('#') || /^\w+=/.test(line)
@@ -301,7 +301,7 @@ export default function SideBySideEditor() {
             parsed = ini.parse(text);
             break;
           case "dotenv":
-            parsed = dotenvParse(Buffer.from(text));
+            parsed = dotenvParse(text);
             break;
           case "csv":
             parsed = Papa.parse(text, { header: true }).data;
@@ -410,7 +410,15 @@ export default function SideBySideEditor() {
             result = yaml.dump(state.value);
             break;
           case "toml":
-            result = TOML.stringify(state.value);
+            // TOML documents must be a table at the root
+            if (state.type !== "object") {
+              throw new Error("TOML requires an object at the root");
+            }
+            // Without `newline`, j-toml returns an array of lines; `integer` keeps whole numbers from becoming floats
+            result = TOML.stringify(state.value, {
+              newline: "\n",
+              integer: Number.MAX_SAFE_INTEGER,
+            });
             break;
           case "toon":
             result = toonEncode(state.value);
@@ -446,7 +454,12 @@ export default function SideBySideEditor() {
           case "msgpack":
             // Encode to MessagePack binary, then convert to base64
             const msgpackEncoded = msgpackEncode(state.value);
-            result = btoa(String.fromCharCode(...msgpackEncoded));
+            // Build the binary string in chunks; spreading a large array overflows the call stack
+            let msgpackBinaryString = "";
+            for (let i = 0; i < msgpackEncoded.length; i += 0x8000) {
+              msgpackBinaryString += String.fromCharCode(...msgpackEncoded.subarray(i, i + 0x8000));
+            }
+            result = btoa(msgpackBinaryString);
             break;
           case "base64":
             const stringToEncode =
