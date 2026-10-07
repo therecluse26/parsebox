@@ -1,0 +1,23 @@
+{
+  "orderId": "ORD-2026-00917",
+  "createdAt": "2026-10-07T09:14:02Z",
+  "customer": {
+    "id": 4821,
+    "name": "Margaret Hamilton",
+    "address": {
+      "street": "1 Apollo Way",
+      "city": "Cambridge",
+      "postalCode": "02139",
+      "country": "US"
+    }
+  },
+  "items": [
+    { "sku": "KB-104", "description": "Mechanical keyboard", "quantity": 1, "unitPrice": 129.99 },
+    { "sku": "MS-220", "description": "Wireless mouse", "quantity": 2, "unitPrice": 39.5 },
+    { "sku": "CB-USB", "description": "USB-C cable, 2 m", "quantity": 3, "unitPrice": 9.95 }
+  ],
+  "payment": { "method": "card", "last4": "4242", "captured": true },
+  "shipping": { "carrier": "UPS", "tracking": null, "estimatedDays": 3 },
+  "tags": ["priority", "gift"],
+  "notes": ""
+}

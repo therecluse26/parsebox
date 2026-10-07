@@ -1,0 +1,25 @@
+# Anchors, aliases, merge keys and block scalars
+defaults: &defaults
+  adapter: postgres
+  host: localhost
+  pool: 5
+
+development:
+  <<: *defaults
+  database: app_dev
+
+production:
+  <<: *defaults
+  host: db.internal
+  database: app_prod
+
+literal_block: |
+  Line breaks
+  are kept
+  exactly.
+folded_block: >
+  These lines
+  get folded into
+  one line.
+quoted: "colon: inside quotes"
+nothing: ~

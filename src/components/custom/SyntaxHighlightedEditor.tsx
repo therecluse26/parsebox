@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 interface Props {
   value: string;
   onChange: (value: string) => void;
+  onScroll?: (e: React.UIEvent<HTMLElement>) => void;
   language: string;
   readOnly: boolean;
   className?: string;
@@ -14,6 +15,7 @@ interface Props {
 export function SyntaxHighlightedEditor({
   value,
   onChange,
+  onScroll,
   language,
   readOnly,
   className,
@@ -46,8 +48,9 @@ export function SyntaxHighlightedEditor({
         style={{ height: '100%', maxHeight: '100%' }}
       >
         <pre
-          className="hljs h-full w-full p-3 overflow-auto font-mono text-sm scrollbar-thin scrollbar-thumb-primary scrollbar-track-background"
+          className="hljs h-full w-full overflow-auto whitespace-pre py-3 pl-1 pr-3 font-mono text-sm leading-[1.5]"
           style={{ height: '100%', maxHeight: '100%' }}
+          onScroll={onScroll}
         >
           <code
             className={`language-${language}`}
@@ -64,7 +67,7 @@ export function SyntaxHighlightedEditor({
       {/* Highlighted overlay */}
       <pre
         ref={preRef}
-        className="hljs absolute inset-0 p-3 overflow-auto font-mono text-sm pointer-events-none scrollbar-thin scrollbar-thumb-primary scrollbar-track-background"
+        className="hljs absolute inset-0 overflow-auto whitespace-pre py-3 pl-1 pr-3 font-mono text-sm leading-[1.5] pointer-events-none"
         style={{
           maxHeight: '100%',
           height: '100%',
@@ -83,11 +86,12 @@ export function SyntaxHighlightedEditor({
         ref={textareaRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 p-3 bg-transparent resize-none font-mono text-sm
-                   text-transparent outline-none overflow-auto
-                   scrollbar-thin scrollbar-thumb-primary scrollbar-track-background"
+        onScroll={onScroll}
+        wrap="off"
+        className="absolute inset-0 overflow-auto whitespace-pre bg-transparent py-3 pl-1 pr-3 font-mono text-sm leading-[1.5]
+                   text-transparent outline-none resize-none"
         style={{
-          caretColor: 'hsl(var(--foreground))',
+          caretColor: 'hsl(var(--primary))',
           maxHeight: '100%',
           height: '100%'
         }}

@@ -1,0 +1,1 @@
+ParseBox converts text between data formats. Paste something on the left, pick an output format on the right, and the result appears instantly. Nothing leaves your browser.

@@ -1,0 +1,6 @@
+2026-10-07 09:14:02 INFO  Server started on port 8080
+2026-10-07 09:14:05 INFO  Connected to database "inventory" (pool size 10)
+2026-10-07 09:15:41 WARN  Slow query: SELECT * FROM orders WHERE status = 'pending' (1243 ms)
+2026-10-07 09:17:13 ERROR Request failed: GET /api/orders/9981 -> 500 Internal Server Error
+2026-10-07 09:17:13 ERROR   at OrderService.find (order-service.ts:88:13)
+2026-10-07 09:20:00 INFO  Scheduled job "cleanup-sessions" finished in 312 ms

@@ -1,54 +1,14 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
-
-<svg
-   width="100mm"
-   height="100mm"
-   viewBox="0 0 100 100"
-   version="1.1"
-   id="svg1"
-   inkscape:version="1.4 (e7c3feb100, 2024-10-09)"
-   sodipodi:docname="parsebox-icon.svg"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg">
-  <sodipodi:namedview
-     id="namedview1"
-     pagecolor="#505050"
-     bordercolor="#eeeeee"
-     borderopacity="1"
-     inkscape:showpageshadow="0"
-     inkscape:pageopacity="0"
-     inkscape:pagecheckerboard="0"
-     inkscape:deskcolor="#505050"
-     inkscape:document-units="mm"
-     inkscape:zoom="0.70021044"
-     inkscape:cx="785.47815"
-     inkscape:cy="311.33498"
-     inkscape:window-width="1920"
-     inkscape:window-height="995"
-     inkscape:window-x="0"
-     inkscape:window-y="30"
-     inkscape:window-maximized="1"
-     inkscape:current-layer="layer1" />
-  <defs
-     id="defs1" />
-  <g
-     inkscape:label="Layer 1"
-     inkscape:groupmode="layer"
-     id="layer1">
-    <text
-       xml:space="preserve"
-       style="font-weight:bold;font-size:101.128px;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans, Bold';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#fafafa;stroke-width:0.379228"
-       x="0.96173847"
-       y="70.859375"
-       id="text1"
-       transform="scale(0.91924926,1.0878442)"><tspan
-         sodipodi:role="line"
-         id="tspan1"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:101.128px;font-family:'Quicksand Medium';-inkscape-font-specification:'Quicksand Medium, ';stroke-width:0.379228"
-         x="0.96173847"
-         y="70.859375">&lt;&gt;</tspan></text>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <style>
+    .ink { fill: #16171a; }
+    .brace { stroke: #f2f1ec; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #f2f1ec; }
+      .brace { stroke: #16171a; }
+    }
+  </style>
+  <path class="ink" d="M60 8H32A24 24 0 0 0 8 32V88A24 24 0 0 0 32 112H60Z"/>
+  <path fill="#ff6b35" d="M60 8H88A24 24 0 0 1 112 32V88A24 24 0 0 1 88 112H60Z"/>
+  <path class="brace" d="M42 36C33 36 33 41 33 48V53C33 57 30 60 25 60C30 60 33 63 33 67V72C33 79 33 84 42 84" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path stroke="#111214" d="M78 40L94 60L78 80" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

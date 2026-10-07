@@ -1,0 +1,17 @@
+// Application settings (JSON5 allows comments)
+{
+  app: {
+    name: 'parsebox-demo', // single-quoted string, unquoted key
+    version: "1.4.2",
+    debug: false,
+  },
+  /* Block comments work too */
+  server: {
+    host: '0.0.0.0',
+    port: 8080,
+    allowedOrigins: [
+      'https://example.com',
+      'https://staging.example.com', // trailing comma
+    ],
+  },
+}

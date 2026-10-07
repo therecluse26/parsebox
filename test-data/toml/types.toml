@@ -1,0 +1,16 @@
+# TOML value types
+basic_string = "tab:\t quote:\" unicode:\u00E9"
+literal_string = 'C:\Users\no\escapes'
+multiline = """
+Roses are red
+Violets are blue"""
+integer = 42
+hex = 0xDEADBEEF
+underscored = 1_000_000
+float = 3.14
+exponent = 5e+22
+bool = true
+inline_table = { x = 1, y = 2 }
+nested_array = [[1, 2], ["a", "b"]]
+offset_datetime = 1979-05-27T07:32:00Z
+local_date = 1979-05-27

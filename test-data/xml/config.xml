@@ -1,0 +1,12 @@
+<config>
+  <app name="parsebox-demo" version="1.4.2" debug="false"/>
+  <server host="0.0.0.0" port="8080">
+    <allowedOrigin>https://example.com</allowedOrigin>
+    <allowedOrigin>https://staging.example.com</allowedOrigin>
+  </server>
+  <database>
+    <host>db.internal</host>
+    <port>5432</port>
+    <name>inventory</name>
+  </database>
+</config>

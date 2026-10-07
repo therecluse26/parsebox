@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Select,
   SelectContent,
@@ -19,30 +19,12 @@ import { encode as msgpackEncode, decode as msgpackDecode } from '@msgpack/msgpa
 import { parse as dotenvParse } from 'dotenv';
 import qs from 'qs';
 import { SyntaxHighlightedEditor } from './SyntaxHighlightedEditor';
+import { LineGutter } from './LineGutter';
+import { formatOptions } from '@/config/formats';
+import { detectFormat as detectInputFormat, TOML_PARSE_OPTIONS } from '@/lib/detectFormat';
 // @ts-ignore
 declare const Papa: any;
 
-const formatOptions = [
-  { value: "auto", label: "Auto Detect" },
-  { value: "text", label: "Plain Text" },
-  { value: "json", label: "JSON" },
-  { value: "json5", label: "JSON5" },
-  { value: "xml", label: "XML" },
-  { value: "yaml", label: "YAML" },
-  { value: "toml", label: "TOML" },
-  { value: "toon", label: "TOON" },
-  { value: "ini", label: "INI" },
-  { value: "dotenv", label: "dotenv" },
-  { value: "csv", label: "CSV" },
-  { value: "tsv", label: "TSV" },
-  { value: "jsonl", label: "JSONL" },
-  { value: "msgpack", label: "MessagePack" },
-  { value: "base64", label: "Base64" },
-  { value: "hex", label: "Hexadecimal" },
-  { value: "binary", label: "Binary" },
-  { value: "uri", label: "URI Encoded" },
-  { value: "querystring", label: "Query String" },
-];
 
 type IntermediateState = {
   type: "primitive" | "array" | "object";
@@ -84,181 +66,13 @@ export default function SideBySideEditor() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [isOutputFormatManuallySet, setIsOutputFormatManuallySet] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [outputError, setOutputError] = useState<string | null>(null);
 
   const detectFormat = (text: string): string => {
-    // Try JSON
-    try {
-      JSON.parse(text);
-      setDetectedFormat("JSON");
-      return "json";
-    } catch {}
-
-    // Try JSON5 (JSON with comments/trailing commas)
-    try {
-      JSON5.parse(text);
-      // Check if it has JSON5-specific features (comments, trailing commas, unquoted keys)
-      if (text.includes('//') || text.includes('/*') || /,\s*[}\]]/.test(text)) {
-        setDetectedFormat("JSON5");
-        return "json5";
-      }
-    } catch {}
-  
-    // Try XML
-    try {
-      new XMLParser().parse(text);
-      if (text.trim().startsWith('<') && text.trim().endsWith('>')) {
-        setDetectedFormat("XML");
-        return "xml";
-      }
-    } catch {}
-  
-    // Try TOML
-    try {
-      TOML.parse(text);
-      // TOML typically has [section] headers or key = value
-      if (/^\[[\w.]+\]/m.test(text) || /^\w+\s*=/.test(text)) {
-        setDetectedFormat("TOML");
-        return "toml";
-      }
-    } catch {}
-
-    // Try YAML
-    try {
-      yaml.load(text);
-      if (text.includes(':') && !text.includes('{') && !text.includes('[')) {
-        setDetectedFormat("YAML");
-        return "yaml";
-      }
-    } catch {}
-
-    // Try TOON
-    try {
-      // TOON detection heuristics:
-      // 1. Array length declarations like [N]:
-      // 2. Tabular field declarations like {field1,field2}:
-      const hasToonArraySyntax = /\[\d+\]:/.test(text);
-      const hasToonTableSyntax = /\{[\w,]+\}:/.test(text);
-      const hasIndentation = /^\s+/m.test(text);
-      const hasColonNewlines = text.includes(':\n') || text.includes(':\r\n');
-
-      if ((hasToonArraySyntax || hasToonTableSyntax) && (hasIndentation || hasColonNewlines)) {
-        // Verify it's valid TOON
-        toonDecode(text);
-        setDetectedFormat("TOON");
-        return "toon";
-      }
-    } catch {}
-
-    // Try INI
-    try {
-      ini.parse(text);
-      // INI has [section] headers or key=value (no spaces around =)
-      if (/^\[[\w\s]+\]/m.test(text) && /^\w+=/.test(text)) {
-        setDetectedFormat("INI");
-        return "ini";
-      }
-    } catch {}
-
-    // Try dotenv
-    try {
-      dotenvParse(Buffer.from(text));
-      // dotenv typically has KEY=value format (often uppercase keys)
-      if (/^[A-Z_]+=/.test(text) || text.split('\n').every(line =>
-        line.trim() === '' || line.startsWith('#') || /^\w+=/.test(line)
-      )) {
-        setDetectedFormat("dotenv");
-        return "dotenv";
-      }
-    } catch {}
-
-    // Try JSONL
-    try {
-      const lines = text.trim().split('\n');
-      if (lines.length > 1 && lines.every(line => {
-        try {
-          JSON.parse(line.trim());
-          return true;
-        } catch {
-          return false;
-        }
-      })) {
-        setDetectedFormat("JSONL");
-        return "jsonl";
-      }
-    } catch {}
-
-    // Try CSV
-    try {
-      const result = Papa.parse(text, { header: true });
-      if (result.data.length > 0 && Object.keys(result.data[0]).length > 1) {
-        setDetectedFormat("CSV");
-        return "csv";
-      }
-    } catch {}
-
-    // Try TSV
-    try {
-      const result = Papa.parse(text, { header: true, delimiter: "\t" });
-      if (result.data.length > 0 && Object.keys(result.data[0]).length > 1 && text.includes('\t')) {
-        setDetectedFormat("TSV");
-        return "tsv";
-      }
-    } catch {}
-  
-    // Try MessagePack (base64-encoded binary)
-    try {
-      const msgpackBinary = Uint8Array.from(atob(text), c => c.charCodeAt(0));
-      msgpackDecode(msgpackBinary);
-      // If it decodes successfully and looks like base64, it's MessagePack
-      if (/^[A-Za-z0-9+/]+=*$/.test(text.trim())) {
-        setDetectedFormat("MessagePack");
-        return "msgpack";
-      }
-    } catch {}
-
-    // Try Base64
-    try {
-      const decoded = atob(text);
-      if (text === btoa(decoded)) {
-        setDetectedFormat("Base64")
-        return "base64";
-      }
-    } catch {}
-  
-    // Try Hex
-    if (/^[0-9A-Fa-f\s]+$/.test(text)) {
-      setDetectedFormat("Hexadecimal");
-      return "hex";
-    }
-  
-    // Try Binary
-    if (/^[01\s]+$/.test(text)) {
-      setDetectedFormat("Binary");
-      return "binary";
-    }
-  
-    // Try URI
-    try {
-      const decoded = decodeURIComponent(text);
-      if (text !== decoded && text.includes('%')) {
-        setDetectedFormat("URI Encoded");
-        return "uri";
-      }
-    } catch {}
-
-    // Try Query String
-    try {
-      const parsed = qs.parse(text);
-      // Check if it looks like a query string (key=value&key2=value2)
-      if (typeof parsed === 'object' && Object.keys(parsed).length > 0 &&
-          (text.includes('=') && (text.includes('&') || !text.includes(' ')))) {
-        setDetectedFormat("Query String");
-        return "querystring";
-      }
-    } catch {}
-
-    setDetectedFormat("Plain Text");
-    return "text";
+    const format = detectInputFormat(text);
+    setDetectedFormat(formatOptions.find((option) => option.value === format)?.label ?? null);
+    return format;
   };
 
   const parseInput = useCallback(
@@ -292,7 +106,7 @@ export default function SideBySideEditor() {
             parsed = yaml.load(text);
             break;
           case "toml":
-            parsed = TOML.parse(text);
+            parsed = TOML.parse(text, TOML_PARSE_OPTIONS);
             break;
           case "toon":
             parsed = toonDecode(text);
@@ -301,7 +115,7 @@ export default function SideBySideEditor() {
             parsed = ini.parse(text);
             break;
           case "dotenv":
-            parsed = dotenvParse(Buffer.from(text));
+            parsed = dotenvParse(text);
             break;
           case "csv":
             parsed = Papa.parse(text, { header: true }).data;
@@ -331,6 +145,7 @@ export default function SideBySideEditor() {
             break;
           case "hex":
             parsed = text
+              .replace(/\s/g, "")
               .match(/.{1,2}/g)
               ?.map((byte) => String.fromCharCode(parseInt(byte, 16)))
               .join("");
@@ -361,12 +176,13 @@ export default function SideBySideEditor() {
             }
             break;
           case "querystring":
-            parsed = qs.parse(text);
+            parsed = qs.parse(text.trim(), { ignoreQueryPrefix: true });
             break;
           default:
             parsed = text;
         }
 
+        setParseError(null);
         if (Array.isArray(parsed)) {
           return { type: "array", value: parsed };
         } else if (typeof parsed === "object" && parsed !== null) {
@@ -376,6 +192,7 @@ export default function SideBySideEditor() {
         }
       } catch (error) {
         console.error(`Error parsing ${format}:`, error);
+        setParseError(error instanceof Error ? error.message : String(error));
         return { type: "primitive", value: `Error: Could not parse ${format}` };
       }
     },
@@ -410,7 +227,15 @@ export default function SideBySideEditor() {
             result = yaml.dump(state.value);
             break;
           case "toml":
-            result = TOML.stringify(state.value);
+            // TOML documents must be a table at the root
+            if (state.type !== "object") {
+              throw new Error("TOML requires an object at the root");
+            }
+            // Without `newline`, j-toml returns an array of lines; `integer` keeps whole numbers from becoming floats
+            result = TOML.stringify(state.value, {
+              newline: "\n",
+              integer: Number.MAX_SAFE_INTEGER,
+            });
             break;
           case "toon":
             result = toonEncode(state.value);
@@ -446,7 +271,12 @@ export default function SideBySideEditor() {
           case "msgpack":
             // Encode to MessagePack binary, then convert to base64
             const msgpackEncoded = msgpackEncode(state.value);
-            result = btoa(String.fromCharCode(...msgpackEncoded));
+            // Build the binary string in chunks; spreading a large array overflows the call stack
+            let msgpackBinaryString = "";
+            for (let i = 0; i < msgpackEncoded.length; i += 0x8000) {
+              msgpackBinaryString += String.fromCharCode(...msgpackEncoded.subarray(i, i + 0x8000));
+            }
+            result = btoa(msgpackBinaryString);
             break;
           case "base64":
             const stringToEncode =
@@ -495,9 +325,11 @@ export default function SideBySideEditor() {
                 ? state.value
                 : JSON.stringify(state.value);
         }
+        setOutputError(null);
         return result;
       } catch (error) {
         console.error(`Error stringifying to ${format}:`, error);
+        setOutputError(error instanceof Error ? error.message : String(error));
         return `Error: Could not convert to ${format}`;
       }
     },
@@ -521,7 +353,8 @@ export default function SideBySideEditor() {
     const newIntermediateState = parseInput(inputText, inputFormat);
     setIntermediateState(newIntermediateState);
     const convertedOutput = stringifyOutput(newIntermediateState, outputFormat);
-    setOutputText(convertedOutput);
+    // Primitives (numbers, undefined from an empty document) pass through unstringified
+    setOutputText(convertedOutput == null ? "" : String(convertedOutput));
   }, [inputText, inputFormat, outputFormat, parseInput, stringifyOutput]);
 
   useEffect(() => {
@@ -570,106 +403,204 @@ export default function SideBySideEditor() {
       });
   };
 
+  const inputBytes = byteLength(inputText);
+  const outputBytes = byteLength(outputText);
+  const activeFormatLabel =
+    inputFormat === "auto"
+      ? detectedFormat
+      : formatOptions.find((option) => option.value === inputFormat)?.label;
+
+  let inputStatus: React.ReactNode = null;
+  if (inputText.trim() !== "") {
+    if (parseError) {
+      inputStatus = <StatusText tone="error" text={parseError} />;
+    } else if (activeFormatLabel === "Plain Text") {
+      inputStatus = <span>plain text</span>;
+    } else if (activeFormatLabel) {
+      inputStatus = <StatusText tone="ok" text={`valid ${activeFormatLabel.toLowerCase()}`} />;
+    }
+  }
+
+  // A parse error already shows in the input footer; the output error would only echo it
+  let outputStatus: React.ReactNode = null;
+  if (parseError) {
+    outputStatus = null;
+  } else if (outputError) {
+    outputStatus = <StatusText tone="error" text={outputError} />;
+  } else if (inputBytes > 0 && outputBytes > 0) {
+    const change = Math.round(((outputBytes - inputBytes) / inputBytes) * 100);
+    outputStatus = (
+      <span>{change === 0 ? "±0" : change > 0 ? `+${change}` : `−${-change}`}% size</span>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full justify-center mt-4">
-      <div className="flex flex-1 min-h-0">
-        <EditorPane
-          value={inputText}
-          onChange={setInputText}
-          format={inputFormat}
-          onFormatChange={handleInputFormatChange}
-          readOnly={false}
-          detectedFormat={detectedFormat}
-        />
-        <div className="flex items-center mx-4">
-          <Button variant="secondary" onClick={handleSwap}>
-            <ArrowLeftRight className="h-4 w-4" />
+    <div className="flex h-full flex-col gap-3 px-4 py-4 md:flex-row md:px-7 md:pb-7 md:pt-5">
+      <EditorPane
+        side="in"
+        value={inputText}
+        onChange={setInputText}
+        format={inputFormat}
+        onFormatChange={handleInputFormatChange}
+        readOnly={false}
+        detectedFormat={detectedFormat}
+        byteSize={inputBytes}
+        status={inputStatus}
+        toolbarAction={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setInputText("")}
+            disabled={!inputText}
+          >
+            clear
           </Button>
-        </div>
-        <EditorPane
-          value={outputText}
-          onChange={() => {}}
-          format={outputFormat}
-          onFormatChange={handleOutputFormatChange}
-          readOnly={true}
-          floatingButtons={
-            <div className="absolute top-2 right-4 flex space-x-2">
-              <Button size="sm" variant="secondary" className="hover:bg-primary" onClick={handleCopyToClipboard}>
-                {copySuccess ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-          }
-        />
+        }
+      />
+      <div className="flex items-center justify-center">
+        <Button
+          size="icon"
+          className="h-11 w-11 rounded"
+          onClick={handleSwap}
+          aria-label="Swap input and output"
+        >
+          <ArrowLeftRight className="h-[18px] w-[18px] rotate-90 md:rotate-0" />
+        </Button>
       </div>
+      <EditorPane
+        side="out"
+        value={outputText}
+        onChange={() => {}}
+        format={outputFormat}
+        onFormatChange={handleOutputFormatChange}
+        readOnly={true}
+        byteSize={outputBytes}
+        status={outputStatus}
+        toolbarAction={
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-2 rounded border-input bg-popover text-xs"
+            onClick={handleCopyToClipboard}
+            disabled={!outputText}
+          >
+            {copySuccess ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {copySuccess ? "copied" : "copy"}
+          </Button>
+        }
+      />
     </div>
   );
 }
 
+const byteLength = (text: string) => new TextEncoder().encode(text).length;
+
+function StatusText({ tone, text }: { tone: "ok" | "error"; text: string }) {
+  return (
+    <span
+      className={tone === "ok" ? "truncate text-success" : "truncate text-destructive"}
+      title={text}
+    >
+      {tone === "ok" ? "✓" : "✗"} {text}
+    </span>
+  );
+}
+
 interface EditorPaneProps {
+  side: "in" | "out";
   value: string;
   onChange: (value: string) => void;
   format: string;
   onFormatChange: (value: string) => void;
   readOnly: boolean;
-  floatingButtons?: React.ReactNode;
-  detectedFormat?: string|null
+  byteSize: number;
+  status: React.ReactNode;
+  toolbarAction: React.ReactNode;
+  detectedFormat?: string | null;
 }
 
 function EditorPane({
+  side,
   value,
   onChange,
   format,
   onFormatChange,
   readOnly,
-  floatingButtons,
-  detectedFormat
+  byteSize,
+  status,
+  toolbarAction,
+  detectedFormat,
 }: EditorPaneProps) {
-  const charCount = value.length;
-  const byteSize = new Blob([value]).size;
+  const gutterRef = useRef<HTMLDivElement>(null);
+  const lineCount = value.split("\n").length;
+  const placeholder = readOnly ? "output will appear here..." : "paste or type anything...";
+
+  // Keep the line numbers aligned with the scrolled text
+  const handleScroll = (e: React.UIEvent<HTMLElement>) => {
+    if (gutterRef.current) {
+      gutterRef.current.scrollTop = e.currentTarget.scrollTop;
+    }
+  };
 
   return (
-    <div className="flex-1 flex flex-col relative min-w-0">
-      <div className="p-2 border-b">
-        <Select value={format} onValueChange={onFormatChange}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {formatOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label} {option.value === 'auto' && value && detectedFormat && '(' + (detectedFormat) + ')'}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <section
+      aria-label={side === "in" ? "Input" : "Output"}
+      className="flex min-h-0 min-w-0 flex-1 flex-col rounded-md border bg-card focus-within:border-input"
+    >
+      <div className="flex items-center justify-between gap-3 border-b py-2 pl-3.5 pr-2.5">
+        <div className="flex min-w-0 items-center gap-2.5 text-[13px]">
+          <span className="text-dim">{side}</span>
+          <Select value={format} onValueChange={onFormatChange}>
+            <SelectTrigger className="h-8 w-auto gap-2 rounded border-input bg-popover px-2.5 text-[13px] lowercase">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="lowercase">
+              {formatOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                  {option.value === "auto" && value && detectedFormat && (
+                    <span className="text-primary"> → {detectedFormat}</span>
+                  )}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {toolbarAction}
       </div>
-      <div className="flex-1 relative min-h-0">
-        {shouldHighlight(format) && readOnly ? (
-          <SyntaxHighlightedEditor
-            value={value}
-            onChange={onChange}
-            language={getHighlightLanguage(format)}
-            readOnly={readOnly}
-            className="rounded-none border-0"
-            placeholder={readOnly ? "Output will appear here..." : "Enter your text here..."}
-          />
-        ) : (
-          <Textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="h-full w-full resize-none rounded-none border-0 font-mono
-              scrollbar-thin scrollbar-thumb-primary scrollbar-track-background"
-            placeholder={
-              readOnly ? "Output will appear here..." : "Enter your text here..."
-            }
-            readOnly={readOnly}
-          />
-        )}
-        {floatingButtons}
+      <div className="flex min-h-0 flex-1">
+        <LineGutter ref={gutterRef} count={lineCount} />
+        <div className="relative min-w-0 flex-1">
+          {shouldHighlight(format) && readOnly ? (
+            <SyntaxHighlightedEditor
+              value={value}
+              onChange={onChange}
+              onScroll={handleScroll}
+              language={getHighlightLanguage(format)}
+              readOnly={readOnly}
+              placeholder={placeholder}
+            />
+          ) : (
+            <Textarea
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onScroll={handleScroll}
+              wrap="off"
+              spellCheck={false}
+              className="h-full w-full resize-none whitespace-pre rounded-none border-0 bg-transparent py-3 pl-1 pr-3 font-mono text-sm leading-[1.5] md:leading-[1.5] caret-primary shadow-none placeholder:text-dim focus-visible:ring-0"
+              placeholder={placeholder}
+              readOnly={readOnly}
+            />
+          )}
+        </div>
       </div>
-      <div className="p-2 text-sm text-gray-500">
-        Characters: {charCount} | {formatByteSize(byteSize)}
+      <div className="flex justify-between gap-3 border-t px-3.5 py-2 text-xs text-dim">
+        <span className="shrink-0">
+          {value.length} chars · {formatByteSize(byteSize)}
+        </span>
+        {status}
       </div>
-    </div>
+    </section>
   );
 }
