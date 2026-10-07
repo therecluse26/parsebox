@@ -1,0 +1,15 @@
+# [[double brackets]] create an array of tables
+[[users]]
+id = 1
+name = "Ada Lovelace"
+role = "admin"
+
+[[users]]
+id = 2
+name = "Alan Turing"
+role = "editor"
+
+[[users]]
+id = 3
+name = "Grace Hopper"
+role = "viewer"

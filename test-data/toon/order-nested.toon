@@ -1,0 +1,24 @@
+orderId: ORD-2026-00917
+createdAt: "2026-10-07T09:14:02Z"
+customer:
+  id: 4821
+  name: Margaret Hamilton
+  address:
+    street: 1 Apollo Way
+    city: Cambridge
+    postalCode: "02139"
+    country: US
+items[3]{sku,description,quantity,unitPrice}:
+  KB-104,Mechanical keyboard,1,129.99
+  MS-220,Wireless mouse,2,39.5
+  CB-USB,"USB-C cable, 2 m",3,9.95
+payment:
+  method: card
+  last4: "4242"
+  captured: true
+shipping:
+  carrier: UPS
+  tracking: null
+  estimatedDays: 3
+tags[2]: priority,gift
+notes: ""

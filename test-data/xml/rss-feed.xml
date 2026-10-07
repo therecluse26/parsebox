@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>ParseBox Blog</title>
+    <link>https://example.com/blog</link>
+    <description>Notes on data formats</description>
+    <item>
+      <title>Why TOON exists</title>
+      <link>https://example.com/blog/toon</link>
+      <dc:creator>Ada Lovelace</dc:creator>
+      <description><![CDATA[<p>TOON saves <strong>tokens</strong> &amp; stays readable.</p>]]></description>
+      <pubDate>Tue, 07 Oct 2026 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Escaping in XML</title>
+      <link>https://example.com/blog/escaping</link>
+      <dc:creator>Alan Turing</dc:creator>
+      <description>Use &lt;, &gt;, &amp;, &quot; and &apos;.</description>
+      <pubDate>Mon, 06 Oct 2026 09:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

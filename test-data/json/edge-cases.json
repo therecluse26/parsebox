@@ -1,0 +1,20 @@
+{
+  "string": "plain",
+  "emptyString": "",
+  "escapes": "line1\nline2\ttabbed \"quoted\" back\\slash",
+  "unicode": "café, naïve, 日本語, 🚀",
+  "integer": 42,
+  "negative": -17,
+  "float": 3.14159,
+  "exponent": 6.022e23,
+  "zero": 0,
+  "boolTrue": true,
+  "boolFalse": false,
+  "nullValue": null,
+  "emptyArray": [],
+  "emptyObject": {},
+  "mixedArray": [1, "two", true, null, { "five": 5 }, [6]],
+  "deep": { "a": { "b": { "c": { "d": { "e": "bottom" } } } } },
+  "key with spaces": "allowed",
+  "special-chars_key.dot": "also allowed"
+}

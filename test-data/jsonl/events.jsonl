@@ -1,0 +1,4 @@
+{"ts":"2026-10-07T09:14:02Z","level":"info","event":"server.start","data":{"port":8080}}
+{"ts":"2026-10-07T09:15:41Z","level":"warn","event":"db.slow_query","data":{"ms":1243,"table":"orders"}}
+{"ts":"2026-10-07T09:17:13Z","level":"error","event":"http.request","data":{"method":"GET","path":"/api/orders/9981","status":500}}
+{"ts":"2026-10-07T09:20:00Z","level":"info","event":"job.done","data":{"job":"cleanup-sessions","ms":312,"tags":["cron","maintenance"]}}

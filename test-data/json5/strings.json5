@@ -1,0 +1,9 @@
+{
+  single: 'It\'s single-quoted',
+  double: "She said \"hi\"",
+  multiline: 'This string \
+continues on the next line',
+  unicode: 'caf\u00e9',
+  'quoted-key': 'keys can be quoted too',
+  list: ['a', 'b', 'c',],
+}

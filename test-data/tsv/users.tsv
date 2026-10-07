@@ -1,0 +1,4 @@
+id	name	email	role	active	age
+1	Ada Lovelace	ada@example.com	admin	true	36
+2	Alan Turing	alan@example.com	editor	true	41
+3	Grace Hopper	grace@example.com	viewer	false	85

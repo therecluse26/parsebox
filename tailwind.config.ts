@@ -20,7 +20,14 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['"JetBrains Mono Variable"', "ui-monospace", "monospace"],
+        mono: ['"JetBrains Mono Variable"', "ui-monospace", "monospace"],
+      },
       colors: {
+        success: "hsl(var(--success))",
+        dim: "hsl(var(--dim))",
+        gutter: "hsl(var(--gutter))",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

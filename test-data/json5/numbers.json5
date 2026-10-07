@@ -1,0 +1,11 @@
+{
+  // JSON5 number extensions
+  hex: 0xFF,
+  leadingDecimal: .5,
+  trailingDecimal: 5.,
+  positiveSign: +1,
+  exponent: 1e3,
+  infinity: Infinity,
+  negativeInfinity: -Infinity,
+  notANumber: NaN,
+}
