@@ -2,6 +2,13 @@
   "name": "parsebox",
   "private": true,
   "version": "0.1",
+  "description": "Convert JSON, YAML, XML, CSV, TOML and 20+ formats in your browser. Decode JWT and Base64, and generate TypeScript, Zod and Go types.",
+  "homepage": "https://parsebox.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/therecluse26/parsebox.git"
+  },
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
