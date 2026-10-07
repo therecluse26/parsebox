@@ -383,12 +383,17 @@ test("json5 NaN/Infinity become null in json only", () => {
   assert.equal(collectLosses(value, "json5", "yaml")?.items.length, 0);
 });
 
-test("hex and binary garble characters above U+00FF", () => {
-  for (const output of ["hex", "binary"]) {
-    const { report } = verifyClaims({ ok: "é", bad: "€", "ключ": "x", list: ["😀"] }, "json", output);
-    assert.deepEqual(kinds(report), { "strings with characters above U+00FF garbled": 3 });
-    assert.equal(collectLosses({ a: "café" }, "json", output), null);
+test("base64, hex and binary keep any character and root bytes", () => {
+  const value = { ok: "é", euro: "€", "ключ": "x", list: ["😀"] };
+  const bytes = new Uint8Array([0xff, 0x00, 0xfe]);
+  for (const output of ["base64", "hex", "binary"]) {
+    assert.equal(collectLosses(value, "json", output), null);
+    assert.deepEqual(read(write(value, output), output), value);
+    assert.equal(collectLosses(bytes, output, output), null);
+    assert.deepEqual(read(write(bytes, output), output), bytes);
   }
+  // Root bytes through a JSON-like writer become numbers
+  assert.deepEqual(kinds(verifyClaims(bytes, "base64", "json").report), { "binary data became numbers": 1 });
 });
 
 // --- Deep and large values ----------------------------------------------------------

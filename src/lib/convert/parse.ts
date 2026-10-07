@@ -10,6 +10,7 @@ import qs from "qs";
 import Papa from "papaparse";
 import { TOML_PARSE_OPTIONS } from "../detectFormat.ts";
 import { decodeJwt } from "../decodeChain.ts";
+import { base64ToBytes, binaryToBytes, hexToBytes, utf8Text } from "./bytes.ts";
 
 /**
  * Parse `text` as `format` (a format `value`, not "auto"). Throws when the text
@@ -45,25 +46,13 @@ export function parseText(text: string, format: string): unknown {
       return parseJsonl(text);
     case "msgpack":
       // MessagePack input is Base64 text of the binary data
-      return msgpackDecode(Uint8Array.from(atob(text), (char) => char.charCodeAt(0)));
+      return msgpackDecode(base64ToBytes(text));
     case "base64":
-      return jsonOrString(atob(text));
+      return bytesValue(base64ToBytes(text));
     case "hex":
-      return jsonOrString(
-        text
-          .replace(/\s/g, "")
-          .match(/.{1,2}/g)
-          ?.map((byte) => String.fromCharCode(parseInt(byte, 16)))
-          .join("")
-      );
+      return bytesValue(hexToBytes(text));
     case "binary":
-      return jsonOrString(
-        text
-          .replace(/\s/g, "")
-          .match(/.{1,8}/g)
-          ?.map((byte) => String.fromCharCode(parseInt(byte, 2)))
-          .join("")
-      );
+      return bytesValue(binaryToBytes(text));
     case "uri":
       return jsonOrString(decodeURIComponent(text));
     case "querystring":
@@ -94,9 +83,14 @@ function parseQueryString(query: string): unknown {
   return qs.parse(query, { ignoreQueryPrefix: true, depth: Infinity, parameterLimit: Infinity, arrayLimit: pairs });
 }
 
+// Decoded bytes are UTF-8 text when they can be, otherwise they stay bytes
+function bytesValue(bytes: Uint8Array): unknown {
+  const text = utf8Text(bytes);
+  return text === null ? bytes : jsonOrString(text);
+}
+
 // Decoded encodings become structured data when they hold JSON, otherwise they stay text
-function jsonOrString(decoded: string | undefined): unknown {
-  if (decoded === undefined) return undefined;
+function jsonOrString(decoded: string): unknown {
   try {
     return JSON.parse(decoded);
   } catch {

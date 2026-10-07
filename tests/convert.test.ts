@@ -50,7 +50,27 @@ test("encodings decode to JSON when they hold JSON, otherwise to text", () => {
   assert.deepEqual(parseText("7b2261223a317d", "hex"), { a: 1 });
   assert.equal(parseText("01101000 01101001", "binary"), "hi");
   assert.equal(parseText("a%20b", "uri"), "a b");
-  assert.equal(parseText("", "hex"), undefined);
+  assert.equal(parseText("", "hex"), "");
+});
+
+test("encodings read and write UTF-8, and keep bytes that are not text", () => {
+  for (const format of ["base64", "hex", "binary"]) {
+    for (const text of ["café €", "ключ 😀"]) {
+      assert.equal(parseText(stringifyValue(text, format), format), text);
+    }
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff]);
+    const read = parseText(stringifyValue(bytes, format), format);
+    assert.ok(read instanceof Uint8Array);
+    assert.deepEqual([...(read as Uint8Array)], [...bytes]);
+  }
+  assert.equal(stringifyValue("é", "hex"), "c3a9");
+  assert.equal(stringifyValue("é", "binary"), "11000011 10101001");
+  assert.equal(parseText("Y2Fmw6k", "base64"), "café");
+  assert.deepEqual(parseText("_w", "base64"), new Uint8Array([0xff]));
+  assert.throws(() => parseText("7g", "hex"), /not a hex digit/);
+  assert.throws(() => parseText("abc", "hex"), /odd number/);
+  assert.throws(() => parseText("0101", "binary"), /8-bit/);
+  assert.throws(() => parseText("@@@@", "base64"), /not valid Base64/);
 });
 
 test("writers treat arrays, objects and primitives differently", () => {

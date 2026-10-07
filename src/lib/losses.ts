@@ -37,14 +37,11 @@ export function collectLosses(value: unknown, inputFormat: string, outputFormat:
     case "xml":
       xmlLosses(c, value);
       break;
-    case "hex":
-    case "binary":
-      // The writer turns each UTF-16 unit into hex or bits; above U+00FF the reader splits them wrongly
-      exoticLosses(c, value, { date: K.dateString, nan: K.nanNull, binary: K.binaryNumbers, latin1: true });
-      break;
     default: {
       const kinds = EXOTIC_OUTPUTS[outputFormat];
       const can = EXOTIC_INPUTS[inputFormat];
+      // The Base64, hex and binary writers keep root bytes exactly
+      if (BYTE_OUTPUTS.has(outputFormat) && isBinary(value)) break;
       // No walk unless the reader can produce a value this writer changes
       if (kinds && can && ((kinds.date && can.date) || (kinds.nan && can.nan) || (kinds.binary && can.binary))) {
         exoticLosses(c, value, kinds);
@@ -94,7 +91,6 @@ const K = {
   dateString: "dates became strings",
   binaryDropped: "binary data dropped",
   binaryNumbers: "binary data became numbers",
-  latin1: "strings with characters above U+00FF garbled",
 } as const;
 
 // A plural noun in the first two words of a kind; for a count of 1 it turns singular
@@ -115,7 +111,7 @@ const ORDER: string[] = [
   K.columnDropped, K.rowDropped, K.objectString, K.dateDropped, K.binaryDropped,
   K.keyMangled, K.cut, K.attrDropped,
   K.emptyArray, K.emptyObject, K.emptyObjectText, K.jsonText, K.arrayJoined,
-  K.nestedArray, K.singleArray, K.textOnly, K.dateMangled, K.latin1,
+  K.nestedArray, K.singleArray, K.textOnly, K.dateMangled,
   K.stripped, K.trimmed, K.carriageReturn, K.backslash, K.nullEmpty, K.nullText, K.nanNull,
   K.binaryNumbers, K.retypedXml, K.retypedIni, K.numberText, K.attrText, K.dateString,
 ];
@@ -250,7 +246,6 @@ interface ExoticKinds {
   date?: string;
   nan?: string;
   binary?: string;
-  latin1?: boolean;
 }
 
 /** Readers that can produce dates, NaN/Infinity or byte arrays */
@@ -259,6 +254,10 @@ const EXOTIC_INPUTS: Record<string, { date?: true; nan?: true; binary?: true }> 
   toml: { date: true, nan: true },
   json5: { nan: true },
   msgpack: { date: true, nan: true, binary: true },
+  // Bytes that are not UTF-8 text
+  base64: { binary: true },
+  hex: { binary: true },
+  binary: { binary: true },
 };
 
 /** What each JSON-like writer does with those values. yaml and msgpack keep all of them. */
@@ -267,26 +266,20 @@ const EXOTIC_OUTPUTS: Record<string, ExoticKinds> = {
   jsonl: { date: K.dateString, nan: K.nanNull, binary: K.binaryNumbers },
   text: { date: K.dateString, nan: K.nanNull, binary: K.binaryNumbers },
   base64: { date: K.dateString, nan: K.nanNull, binary: K.binaryNumbers },
+  hex: { date: K.dateString, nan: K.nanNull, binary: K.binaryNumbers },
+  binary: { date: K.dateString, nan: K.nanNull, binary: K.binaryNumbers },
   uri: { date: K.dateString, nan: K.nanNull, binary: K.binaryNumbers },
   json5: { date: K.dateString, binary: K.binaryNumbers },
   toon: { date: K.dateString, nan: K.nanNull, binary: K.binaryDropped },
   toml: { binary: K.binaryNumbers },
 };
 
-const ABOVE_LATIN1 = /[^\u0000-ÿ]/;
+const BYTE_OUTPUTS = new Set(["base64", "hex", "binary"]);
 
 function exoticLosses(c: Collector, value: unknown, kinds: ExoticKinds): void {
-  const { date, nan, binary, latin1 } = kinds;
-  walk(c, value, (v, key) => {
-    if (latin1 && typeof key === "string" && ABOVE_LATIN1.test(key)) {
-      add(c, K.latin1);
-      // Count the entry once even when its value is garbled too
-      return isContainer(v);
-    }
-    if (typeof v === "string") {
-      if (latin1 && ABOVE_LATIN1.test(v)) add(c, K.latin1);
-      return false;
-    }
+  const { date, nan, binary } = kinds;
+  walk(c, value, (v) => {
+    if (typeof v === "string") return false;
     if (typeof v === "number") {
       if (nan && !Number.isFinite(v)) add(c, nan);
       return false;

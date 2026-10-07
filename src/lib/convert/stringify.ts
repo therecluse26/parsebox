@@ -7,6 +7,7 @@ import ini from "ini";
 import { encode as msgpackEncode } from "@msgpack/msgpack";
 import qs from "qs";
 import Papa from "papaparse";
+import { bytesToBase64, bytesToBinary, bytesToHex, utf8Bytes } from "./bytes.ts";
 
 /**
  * Write a parsed value as `format`. Throws when the format cannot hold the value
@@ -69,17 +70,11 @@ function write(value: any, format: string): unknown {
     case "msgpack":
       return bytesToBase64(msgpackEncode(value));
     case "base64":
-      return btoa(unescape(encodeURIComponent(isPrimitive ? value : JSON.stringify(value))));
+      return bytesToBase64(toBytes(value, isPrimitive));
     case "hex":
-      return (isPrimitive ? value : JSON.stringify(value))
-        .split("")
-        .map((char: string) => char.charCodeAt(0).toString(16).padStart(2, "0"))
-        .join("");
+      return bytesToHex(toBytes(value, isPrimitive));
     case "binary":
-      return (isPrimitive ? value : JSON.stringify(value))
-        .split("")
-        .map((char: string) => char.charCodeAt(0).toString(2).padStart(8, "0"))
-        .join(" ");
+      return bytesToBinary(toBytes(value, isPrimitive));
     case "uri":
       return encodeURIComponent(isPrimitive ? value : JSON.stringify(value));
     case "querystring":
@@ -107,11 +102,9 @@ function hasSharedObjects(root: unknown): boolean {
   return false;
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  // Build the binary string in chunks; spreading a large array overflows the call stack
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
+// Bytes are written as they are; text as UTF-8; anything else as the UTF-8 of its JSON
+function toBytes(value: any, isPrimitive: boolean): Uint8Array {
+  if (value instanceof Uint8Array) return value;
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  return utf8Bytes(isPrimitive ? (value === undefined ? "" : String(value)) : JSON.stringify(value));
 }
