@@ -1,0 +1,11 @@
+{
+  "__proto__": { "polluted": true },
+  "constructor": { "prototype": { "polluted": true } },
+  "prototype": "plain value",
+  "hasOwnProperty": "shadowed",
+  "toString": "shadowed",
+  "valueOf": 0,
+  "duplicate": "first",
+  "duplicate": "second",
+  "nested": { "__proto__": [1, 2, 3] }
+}

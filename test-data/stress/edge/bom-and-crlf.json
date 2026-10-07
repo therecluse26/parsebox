@@ -1,0 +1,25 @@
+﻿{
+  "orderId": "ORD-2026-000042",
+  "customer": {
+    "name": "Ada Lovelace",
+    "email": "ada@example.com",
+    "city": "London"
+  },
+  "items": [
+    {
+      "sku": "WID-1",
+      "name": "Widget",
+      "qty": 2,
+      "price": 9.99
+    },
+    {
+      "sku": "GAD-7",
+      "name": "Gadget ⚙️",
+      "qty": 1,
+      "price": 24.5
+    }
+  ],
+  "coupon": null,
+  "notes": "",
+  "paid": true
+}
