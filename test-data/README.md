@@ -2,7 +2,7 @@
 
 Sample inputs for manual testing. Open a file, copy everything, and paste it into the ParseBox input panel.
 
-There is one folder per input format. The folder names match the format `value`s in `formatOptions` (`src/components/custom/SideBySideEditor.tsx`).
+There is one folder per input format. The folder names match the format `value`s in `formatOptions` (`src/config/formats.ts`).
 
 ## Shared data sets
 
@@ -14,9 +14,9 @@ Many formats contain the same data, so you can compare conversions:
 
 ## Copy and paste rules
 
-- ParseBox does not trim the input. The Base64, hex, binary, MessagePack, URI and query string files have **no trailing line break**. If your editor adds one, Base64 auto-detection fails and the hex reader gets an extra byte.
-- The hex reader does not skip spaces or line breaks. Keep hex input as one unbroken string.
-- The Base64, hex and binary readers convert one byte to one character. They do not decode UTF-8. These samples use ASCII only.
+- The Base64, hex, binary, MessagePack, URI and query string files have **no trailing line break**. Auto detect and the readers accept one, but keep the files without it.
+- The hex and binary readers skip spaces and line breaks between digits. Any other character is an error.
+- The Base64, hex and binary readers decode UTF-8. Bytes that are not UTF-8 stay bytes, and the Base64, hex and binary writers write them back exactly.
 - MessagePack input and output is Base64 text of the binary data.
 
 ## Files

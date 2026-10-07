@@ -5,15 +5,11 @@ import { defineConfig } from "vite";
 export default defineConfig(({ command }) => {
   return {
     base: "",
+    worker: { format: "es" },
     plugins: [react()],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
-      },
-    },
-    define: {
-      global: {
-        basename: "",
       },
     },
     build: {
@@ -30,13 +26,14 @@ export default defineConfig(({ command }) => {
         },
       },
       commonjsOptions: {
-        include: [/papaparse/, /node_modules/],
+        include: [/node_modules/],
         transformMixedEsModules: true
       }
     },
     optimizeDeps: {
+      // The worker imports the parsers, so the dev server scans it for dependencies too
+      entries: ["index.html", "src/workers/convert.worker.ts"],
       include: ["react", "react-dom"],
-      exclude: ['papaparse']
     },
   };
 });

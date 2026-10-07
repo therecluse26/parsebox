@@ -1,35 +1,17 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeftRight, Minimize2, Maximize2, Copy, Check } from "lucide-react";
+import React, { useState, useRef, useMemo } from "react";
+import { ArrowLeftRight, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { XMLParser, XMLBuilder } from "fast-xml-parser";
-import yaml from "js-yaml";
-import { encode as toonEncode, decode as toonDecode } from '@toon-format/toon';
-import JSON5 from 'json5';
-import TOML from '@ltd/j-toml';
-import ini from 'ini';
-import { encode as msgpackEncode, decode as msgpackDecode } from '@msgpack/msgpack';
-import { parse as dotenvParse } from 'dotenv';
-import qs from 'qs';
-import { SyntaxHighlightedEditor } from './SyntaxHighlightedEditor';
-import { LineGutter } from './LineGutter';
-import { formatOptions } from '@/config/formats';
-import { detectFormat as detectInputFormat, TOML_PARSE_OPTIONS } from '@/lib/detectFormat';
-// @ts-ignore
-declare const Papa: any;
-
-
-type IntermediateState = {
-  type: "primitive" | "array" | "object";
-  value: any;
-};
+import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
+import { FormatSelect } from "./FormatSelect";
+import { DecodeChain } from "./notices/DecodeChain";
+import { RepairNotice } from "./notices/RepairNotice";
+import { SecretsNotice } from "./notices/SecretsNotice";
+import { LossReport } from "./notices/LossReport";
+import { LargeInputNotice } from "./notices/LargeInputNotice";
+import { formatLabel, isInputOnly, isOutputOnly } from "@/config/formats";
+import { LIMITS } from "@/config/limits";
+import { countLines, sizeLabel } from "@/lib/convert/measure";
+import { useConversion, useDelayedFlag } from "@/hooks/useConversion";
 
 const formatByteSize = (bytes: number) => {
   if (bytes === 0) return "0 Bytes";
@@ -38,303 +20,82 @@ const formatByteSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
 };
 
-const shouldHighlight = (format: string): boolean => {
-  return ['json', 'json5', 'xml', 'yaml', 'toml', 'toon', 'ini', 'jsonl'].includes(format);
+// The read-only preview of a large input: its first LIMITS.largeInputChars, cut at a line break when one is near
+const previewOf = (text: string) => {
+  const cut = text.lastIndexOf("\n", LIMITS.largeInputChars);
+  return text.slice(0, cut > LIMITS.largeInputChars / 2 ? cut : LIMITS.largeInputChars);
 };
 
-const getHighlightLanguage = (format: string): string => {
-  const languageMap: Record<string, string> = {
-    'json': 'json',
-    'json5': 'json',
-    'xml': 'xml',
-    'yaml': 'yaml',
-    'toml': 'toml',
-    'toon': 'yaml',
-    'ini': 'ini',
-    'jsonl': 'json',
-  };
-  return languageMap[format] || 'plaintext';
-};
+// "secret scan (over 10 MB)" → "secret scan skipped (over 10 MB)"
+const skippedNote = (item: string) =>
+  item.includes(" (") ? item.replace(" (", " skipped (") : `${item} skipped`;
 
 export default function SideBySideEditor() {
   const [inputText, setInputText] = useState("");
-  const [outputText, setOutputText] = useState("");
+  // True for pasted, dropped or swapped input over LIMITS.largeInputChars: the pane shows a read-only preview
+  const [largeInput, setLargeInput] = useState(false);
   const [inputFormat, setInputFormat] = useState("auto");
   const [outputFormat, setOutputFormat] = useState("text");
-  const [intermediateState, setIntermediateState] =
-    useState<IntermediateState | null>(null);
-  const [copySuccess, setCopySuccess] = useState(false);
-  const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
+  // False: in auto mode the output format follows the detected format
   const [isOutputFormatManuallySet, setIsOutputFormatManuallySet] = useState(false);
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [outputError, setOutputError] = useState<string | null>(null);
+  const [redactSecrets, setRedactSecrets] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const inputRef = useRef<CodeEditorHandle>(null);
 
-  const detectFormat = (text: string): string => {
-    const format = detectInputFormat(text);
-    setDetectedFormat(formatOptions.find((option) => option.value === format)?.label ?? null);
-    return format;
+  const { result, busy } = useConversion({
+    text: inputText,
+    inputFormat,
+    outputFormat,
+    outputFormatLocked: isOutputFormatManuallySet,
+    redactSecrets,
+  });
+  const converting = useDelayedFlag(busy, 300);
+
+  const following = inputFormat === "auto" && !isOutputFormatManuallySet;
+  const activeOutputFormat = following && result ? result.outputFormatUsed : outputFormat;
+  const detectedFormat = result?.detectedFormat ? formatLabel(result.detectedFormat) ?? null : null;
+  const parseError = result?.parseError ?? null;
+  // Error positions refer to the innermost layer, which is not the text in the input pane
+  const errorLine = parseError?.line !== undefined && result?.decodeChain.length === 0 ? parseError.line : undefined;
+  // The format that colours the input pane; none when a decode chain means the pane shows encoded text
+  const inputSyntaxFormat =
+    inputFormat !== "auto" ? inputFormat : result?.decodeChain.length === 0 ? result.inputFormatUsed : null;
+
+  const output = result?.output ?? "";
+  const displayOutput = useMemo(
+    () => (output.length > LIMITS.displayMaxChars ? output.slice(0, LIMITS.displayMaxChars) : output),
+    [output]
+  );
+  // The text in the input pane; never the whole of a large input
+  const shownInput = useMemo(() => (largeInput ? previewOf(inputText) : inputText), [inputText, largeInput]);
+  const inputLines = useMemo(() => countLines(shownInput), [shownInput]);
+  const hasInput = useMemo(() => /\S/.test(inputText), [inputText]);
+  // Byte counts come from the worker, so big input is never encoded on the main thread
+  const inputBytes = result?.inputBytes ?? 0;
+  const outputBytes = result?.outputBytes ?? 0;
+
+  // Every path that replaces the whole input: large text goes to the read-only preview
+  const replaceInput = (text: string) => {
+    setInputText(text);
+    setLargeInput(text.length > LIMITS.largeInputChars);
   };
 
-  const parseInput = useCallback(
-    (text: string, format: string): IntermediateState => {
-      try {
-        let actualFormat = format;
-        if (format === "auto") {
-          actualFormat = detectFormat(text);
-          // Auto-sync output format if not manually set
-          if (!isOutputFormatManuallySet) {
-            setOutputFormat(actualFormat);
-          }
-        }
+  // A paste that would make the input large skips the editor and goes to the read-only preview.
+  // The preview is read-only, so a paste there replaces the whole input.
+  const handlePaste = (pasted: string, from: number, to: number) => {
+    if (!largeInput && inputText.length + pasted.length <= LIMITS.largeInputChars) return false;
+    const next = largeInput ? pasted : inputText.slice(0, from) + pasted + inputText.slice(to);
+    if (!largeInput && next.length <= LIMITS.largeInputChars) return false;
+    replaceInput(next);
+    return true;
+  };
 
-        let parsed: any;
-        switch (actualFormat) {
-          case "json":
-            parsed = JSON.parse(text);
-            break;
-          case "json5":
-            parsed = JSON5.parse(text);
-            break;
-          case "xml":
-            parsed = new XMLParser({
-              ignoreAttributes: false,
-              attributeNamePrefix: "@_",
-              textNodeName: "#text",
-            }).parse(text);
-            break;
-          case "yaml":
-            parsed = yaml.load(text);
-            break;
-          case "toml":
-            parsed = TOML.parse(text, TOML_PARSE_OPTIONS);
-            break;
-          case "toon":
-            parsed = toonDecode(text);
-            break;
-          case "ini":
-            parsed = ini.parse(text);
-            break;
-          case "dotenv":
-            parsed = dotenvParse(text);
-            break;
-          case "csv":
-            parsed = Papa.parse(text, { header: true }).data;
-            break;
-          case "tsv":
-            parsed = Papa.parse(text, { header: true, delimiter: "\t" }).data;
-            break;
-          case "jsonl":
-            parsed = text
-              .trim()
-              .split("\n")
-              .filter((line) => line.trim())
-              .map((line) => JSON.parse(line));
-            break;
-          case "msgpack":
-            // Decode base64 to binary, then decode MessagePack
-            const msgpackBinary = Uint8Array.from(atob(text), c => c.charCodeAt(0));
-            parsed = msgpackDecode(msgpackBinary);
-            break;
-          case "base64":
-            const decodedText = atob(text);
-            try {
-              parsed = JSON.parse(decodedText);
-            } catch {
-              parsed = decodedText;
-            }
-            break;
-          case "hex":
-            parsed = text
-              .replace(/\s/g, "")
-              .match(/.{1,2}/g)
-              ?.map((byte) => String.fromCharCode(parseInt(byte, 16)))
-              .join("");
-            try {
-              parsed = JSON.parse(parsed);
-            } catch {
-              // If it's not valid JSON, keep it as a string
-            }
-            break;
-          case "binary":
-            parsed = text
-              .replace(/\s/g, "")
-              .match(/.{1,8}/g)
-              ?.map((byte) => String.fromCharCode(parseInt(byte, 2)))
-              .join("");
-            try {
-              parsed = JSON.parse(parsed);
-            } catch {
-              // If it's not valid JSON, keep it as a string
-            }
-            break;
-          case "uri":
-            parsed = decodeURIComponent(text);
-            try {
-              parsed = JSON.parse(parsed);
-            } catch {
-              // If it's not valid JSON, keep it as a string
-            }
-            break;
-          case "querystring":
-            parsed = qs.parse(text.trim(), { ignoreQueryPrefix: true });
-            break;
-          default:
-            parsed = text;
-        }
-
-        setParseError(null);
-        if (Array.isArray(parsed)) {
-          return { type: "array", value: parsed };
-        } else if (typeof parsed === "object" && parsed !== null) {
-          return { type: "object", value: parsed };
-        } else {
-          return { type: "primitive", value: parsed };
-        }
-      } catch (error) {
-        console.error(`Error parsing ${format}:`, error);
-        setParseError(error instanceof Error ? error.message : String(error));
-        return { type: "primitive", value: `Error: Could not parse ${format}` };
-      }
-    },
-    [isOutputFormatManuallySet]
-  );
-
-  const stringifyOutput = useCallback(
-    (state: IntermediateState, format: string): string => {
-      try {
-        let result: string;
-        switch (format) {
-          case "json":
-            result = JSON.stringify(state.value, null, 2);
-            break;
-          case "json5":
-            result = JSON5.stringify(state.value, null, 2);
-            break;
-          case "xml":
-            const xmlBuilder = new XMLBuilder({
-              ignoreAttributes: false,
-              format: true,
-              attributeNamePrefix: "@_",
-              textNodeName: "#text",
-            });
-            result = xmlBuilder.build(
-              state.type === "array"
-                ? { root: { item: state.value } }
-                : state.value
-            );
-            break;
-          case "yaml":
-            result = yaml.dump(state.value);
-            break;
-          case "toml":
-            // TOML documents must be a table at the root
-            if (state.type !== "object") {
-              throw new Error("TOML requires an object at the root");
-            }
-            // Without `newline`, j-toml returns an array of lines; `integer` keeps whole numbers from becoming floats
-            result = TOML.stringify(state.value, {
-              newline: "\n",
-              integer: Number.MAX_SAFE_INTEGER,
-            });
-            break;
-          case "toon":
-            result = toonEncode(state.value);
-            break;
-          case "ini":
-            result = ini.stringify(state.value);
-            break;
-          case "dotenv":
-            // Manually stringify to dotenv format (key=value)
-            if (state.type === "object") {
-              result = Object.entries(state.value)
-                .map(([key, value]) => `${key}=${value}`)
-                .join("\n");
-            } else {
-              result = String(state.value);
-            }
-            break;
-          case "csv":
-            result = Papa.unparse(
-              state.type === "array" ? state.value : [state.value]
-            );
-            break;
-          case "tsv":
-            result = Papa.unparse(
-              state.type === "array" ? state.value : [state.value],
-              { delimiter: "\t" }
-            );
-            break;
-          case "jsonl":
-            const jsonlArray = state.type === "array" ? state.value : [state.value];
-            result = jsonlArray.map((item: any) => JSON.stringify(item)).join("\n");
-            break;
-          case "msgpack":
-            // Encode to MessagePack binary, then convert to base64
-            const msgpackEncoded = msgpackEncode(state.value);
-            // Build the binary string in chunks; spreading a large array overflows the call stack
-            let msgpackBinaryString = "";
-            for (let i = 0; i < msgpackEncoded.length; i += 0x8000) {
-              msgpackBinaryString += String.fromCharCode(...msgpackEncoded.subarray(i, i + 0x8000));
-            }
-            result = btoa(msgpackBinaryString);
-            break;
-          case "base64":
-            const stringToEncode =
-              state.type === "primitive"
-                ? state.value
-                : JSON.stringify(state.value);
-            result = btoa(unescape(encodeURIComponent(stringToEncode)));
-            break;
-          case "hex":
-            const stringToHex =
-              state.type === "primitive"
-                ? state.value
-                : JSON.stringify(state.value);
-            result = stringToHex
-              .split("")
-              .map((char: string) =>
-                char.charCodeAt(0).toString(16).padStart(2, "0")
-              )
-              .join("");
-            break;
-          case "binary":
-            const stringToBinary =
-              state.type === "primitive"
-                ? state.value
-                : JSON.stringify(state.value);
-            result = stringToBinary
-              .split("")
-              .map((char: string) =>
-                char.charCodeAt(0).toString(2).padStart(8, "0")
-              )
-              .join(" ");
-            break;
-          case "uri":
-            const stringToUri =
-              state.type === "primitive"
-                ? state.value
-                : JSON.stringify(state.value);
-            result = encodeURIComponent(stringToUri);
-            break;
-          case "querystring":
-            result = qs.stringify(state.value);
-            break;
-          default:
-            result =
-              state.type === "primitive"
-                ? state.value
-                : JSON.stringify(state.value);
-        }
-        setOutputError(null);
-        return result;
-      } catch (error) {
-        console.error(`Error stringifying to ${format}:`, error);
-        setOutputError(error instanceof Error ? error.message : String(error));
-        return `Error: Could not convert to ${format}`;
-      }
-    },
-    []
-  );
+  // Dropped text that would make the input large replaces it, like a paste into the preview
+  const handleDrop = (dropped: string) => {
+    if (!largeInput && inputText.length + dropped.length <= LIMITS.largeInputChars) return false;
+    replaceInput(dropped);
+    return true;
+  };
 
   const handleOutputFormatChange = (newFormat: string) => {
     setOutputFormat(newFormat);
@@ -342,6 +103,8 @@ export default function SideBySideEditor() {
   };
 
   const handleInputFormatChange = (newFormat: string) => {
+    // Leaving auto mode keeps the output format it showed
+    if (inputFormat === "auto" && newFormat !== "auto") setOutputFormat(activeOutputFormat);
     setInputFormat(newFormat);
     // Reset the manual flag when switching to auto mode
     if (newFormat === "auto") {
@@ -349,51 +112,23 @@ export default function SideBySideEditor() {
     }
   };
 
-  const handleConvert = useCallback(() => {
-    const newIntermediateState = parseInput(inputText, inputFormat);
-    setIntermediateState(newIntermediateState);
-    const convertedOutput = stringifyOutput(newIntermediateState, outputFormat);
-    // Primitives (numbers, undefined from an empty document) pass through unstringified
-    setOutputText(convertedOutput == null ? "" : String(convertedOutput));
-  }, [inputText, inputFormat, outputFormat, parseInput, stringifyOutput]);
-
-  useEffect(() => {
-    handleConvert();
-  }, [handleConvert]);
+  const swapBlockedReason = isOutputOnly(activeOutputFormat)
+    ? `Swap is unavailable: ${formatLabel(activeOutputFormat) ?? activeOutputFormat} is output only`
+    : null;
 
   const handleSwap = () => {
-    setInputText(outputText);
-    setOutputText(inputText);
-    const newInputFormat = outputFormat;
-    const newOutputFormat = inputFormat;
-    setInputFormat(newInputFormat);
-    setOutputFormat(newOutputFormat);
-    setIntermediateState(null);
-    // Update manual flag based on new input format
-    if (newInputFormat === "auto") {
-      setIsOutputFormatManuallySet(false);
-    } else {
-      setIsOutputFormatManuallySet(true);
-    }
-  };
-
-  const handleMinify = () => {
-    if (intermediateState) {
-      const minified = JSON.stringify(intermediateState.value);
-      setOutputText(minified);
-    }
-  };
-
-  const handleBeautify = () => {
-    if (intermediateState) {
-      const beautified = JSON.stringify(intermediateState.value, null, 2);
-      setOutputText(beautified);
-    }
+    if (swapBlockedReason) return;
+    const previousInputFormat = inputFormat === "auto" ? result?.inputFormatUsed ?? "text" : inputFormat;
+    replaceInput(output);
+    setInputFormat(activeOutputFormat);
+    setOutputFormat(isInputOnly(previousInputFormat) ? "json" : previousInputFormat);
+    // The new input format is never auto, so the output format stays as set
+    setIsOutputFormatManuallySet(true);
   };
 
   const handleCopyToClipboard = () => {
     navigator.clipboard
-      .writeText(outputText)
+      .writeText(output)
       .then(() => {
         setCopySuccess(true);
         setTimeout(() => setCopySuccess(false), 1500);
@@ -403,17 +138,33 @@ export default function SideBySideEditor() {
       });
   };
 
-  const inputBytes = byteLength(inputText);
-  const outputBytes = byteLength(outputText);
-  const activeFormatLabel =
-    inputFormat === "auto"
-      ? detectedFormat
-      : formatOptions.find((option) => option.value === inputFormat)?.label;
+  // Put the caret on the error and scroll it into view
+  const jumpToError = () => {
+    if (errorLine !== undefined) inputRef.current?.jumpTo(errorLine, parseError?.column ?? 1);
+  };
+
+  const activeFormatLabel = inputFormat === "auto" ? detectedFormat : formatLabel(inputFormat);
 
   let inputStatus: React.ReactNode = null;
-  if (inputText.trim() !== "") {
+  if (hasInput && result) {
     if (parseError) {
-      inputStatus = <StatusText tone="error" text={parseError} />;
+      const message = parseError.hint ? `${parseError.message} · ${parseError.hint}` : parseError.message;
+      // A large input's error can lie past the preview, where there is nothing to jump to
+      inputStatus =
+        errorLine !== undefined && errorLine <= inputLines ? (
+          <button
+            type="button"
+            className="min-w-0 truncate text-left hover:underline"
+            onClick={jumpToError}
+            title={`${message} (go to line ${errorLine})`}
+          >
+            <StatusText tone="error" text={message} />
+          </button>
+        ) : (
+          <StatusText tone="error" text={message} />
+        );
+    } else if (result.repair && activeFormatLabel) {
+      inputStatus = <StatusText tone="ok" text={`repaired ${activeFormatLabel.toLowerCase()}`} />;
     } else if (activeFormatLabel === "Plain Text") {
       inputStatus = <span>plain text</span>;
     } else if (activeFormatLabel) {
@@ -425,8 +176,8 @@ export default function SideBySideEditor() {
   let outputStatus: React.ReactNode = null;
   if (parseError) {
     outputStatus = null;
-  } else if (outputError) {
-    outputStatus = <StatusText tone="error" text={outputError} />;
+  } else if (result?.outputError) {
+    outputStatus = <StatusText tone="error" text={result.outputError} />;
   } else if (inputBytes > 0 && outputBytes > 0) {
     const change = Math.round(((outputBytes - inputBytes) / inputBytes) * 100);
     outputStatus = (
@@ -434,24 +185,47 @@ export default function SideBySideEditor() {
     );
   }
 
+  const outputNotes: string[] = [];
+  if (converting) outputNotes.push("converting…");
+  if (output.length > displayOutput.length) {
+    outputNotes.push(`showing first ${sizeLabel(LIMITS.displayMaxChars)} · copy copies all`);
+  }
+  if (result) outputNotes.push(...result.notes, ...result.skipped.map(skippedNote));
+
   return (
     <div className="flex h-full flex-col gap-3 px-4 py-4 md:flex-row md:px-7 md:pb-7 md:pt-5">
       <EditorPane
         side="in"
-        value={inputText}
+        value={shownInput}
         onChange={setInputText}
+        onPasteText={handlePaste}
+        onDropText={handleDrop}
+        editorRef={inputRef}
+        syntaxFormat={inputSyntaxFormat}
         format={inputFormat}
         onFormatChange={handleInputFormatChange}
-        readOnly={false}
+        readOnly={largeInput}
         detectedFormat={detectedFormat}
+        chars={inputText.length}
         byteSize={inputBytes}
+        errorLine={errorLine}
         status={inputStatus}
+        notices={
+          <>
+            {largeInput && (
+              <LargeInputNotice chars={inputText.length} shown={shownInput.length} onClear={() => replaceInput("")} />
+            )}
+            <DecodeChain steps={result?.decodeChain ?? []} innerFormat={result?.detectedFormat ?? null} />
+            <RepairNotice repair={result?.repair ?? null} />
+            <SecretsNotice secrets={result?.secrets ?? null} redact={redactSecrets} onRedactChange={setRedactSecrets} />
+          </>
+        }
         toolbarAction={
           <Button
             variant="ghost"
             size="sm"
             className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => setInputText("")}
+            onClick={() => replaceInput("")}
             disabled={!inputText}
           >
             clear
@@ -459,31 +233,38 @@ export default function SideBySideEditor() {
         }
       />
       <div className="flex items-center justify-center">
-        <Button
-          size="icon"
-          className="h-11 w-11 rounded"
-          onClick={handleSwap}
-          aria-label="Swap input and output"
-        >
-          <ArrowLeftRight className="h-[18px] w-[18px] rotate-90 md:rotate-0" />
-        </Button>
+        {/* A disabled button gets no hover, so the wrapper carries the tooltip */}
+        <span title={swapBlockedReason ?? undefined}>
+          <Button
+            size="icon"
+            className="h-11 w-11 rounded"
+            onClick={handleSwap}
+            disabled={swapBlockedReason !== null}
+            aria-label={swapBlockedReason ?? "Swap input and output"}
+          >
+            <ArrowLeftRight className="h-[18px] w-[18px] rotate-90 md:rotate-0" />
+          </Button>
+        </span>
       </div>
       <EditorPane
         side="out"
-        value={outputText}
-        onChange={() => {}}
-        format={outputFormat}
+        value={displayOutput}
+        syntaxFormat={activeOutputFormat}
+        format={activeOutputFormat}
         onFormatChange={handleOutputFormatChange}
         readOnly={true}
+        chars={output.length}
         byteSize={outputBytes}
         status={outputStatus}
+        footerNote={outputNotes.join(" · ")}
+        notices={<LossReport losses={result?.losses ?? null} />}
         toolbarAction={
           <Button
             variant="outline"
             size="sm"
             className="h-8 gap-2 rounded border-input bg-popover text-xs"
             onClick={handleCopyToClipboard}
-            disabled={!outputText}
+            disabled={!output}
           >
             {copySuccess ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             {copySuccess ? "copied" : "copy"}
@@ -493,8 +274,6 @@ export default function SideBySideEditor() {
     </div>
   );
 }
-
-const byteLength = (text: string) => new TextEncoder().encode(text).length;
 
 function StatusText({ tone, text }: { tone: "ok" | "error"; text: string }) {
   return (
@@ -509,13 +288,25 @@ function StatusText({ tone, text }: { tone: "ok" | "error"; text: string }) {
 
 interface EditorPaneProps {
   side: "in" | "out";
+  /** The text shown, which for the output can be a slice of the full output */
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
+  onPasteText?: (text: string, from: number, to: number) => boolean;
+  onDropText?: (text: string) => boolean;
+  editorRef?: React.Ref<CodeEditorHandle>;
+  /** The format that picks the highlighting and folding; null for plain text */
+  syntaxFormat: string | null;
   format: string;
   onFormatChange: (value: string) => void;
   readOnly: boolean;
+  chars: number;
   byteSize: number;
+  errorLine?: number;
   status: React.ReactNode;
+  /** Dim text after the size in the footer */
+  footerNote?: string;
+  /** Notices above the footer; the row hides when they all render nothing */
+  notices?: React.ReactNode;
   toolbarAction: React.ReactNode;
   detectedFormat?: string | null;
 }
@@ -524,24 +315,23 @@ function EditorPane({
   side,
   value,
   onChange,
+  onPasteText,
+  onDropText,
+  editorRef,
+  syntaxFormat,
   format,
   onFormatChange,
   readOnly,
+  chars,
   byteSize,
+  errorLine,
   status,
+  footerNote,
+  notices,
   toolbarAction,
   detectedFormat,
 }: EditorPaneProps) {
-  const gutterRef = useRef<HTMLDivElement>(null);
-  const lineCount = value.split("\n").length;
-  const placeholder = readOnly ? "output will appear here..." : "paste or type anything...";
-
-  // Keep the line numbers aligned with the scrolled text
-  const handleScroll = (e: React.UIEvent<HTMLElement>) => {
-    if (gutterRef.current) {
-      gutterRef.current.scrollTop = e.currentTarget.scrollTop;
-    }
-  };
+  const placeholder = side === "out" ? "output will appear here..." : "paste or type anything...";
 
   return (
     <section
@@ -551,54 +341,43 @@ function EditorPane({
       <div className="flex items-center justify-between gap-3 border-b py-2 pl-3.5 pr-2.5">
         <div className="flex min-w-0 items-center gap-2.5 text-[13px]">
           <span className="text-dim">{side}</span>
-          <Select value={format} onValueChange={onFormatChange}>
-            <SelectTrigger className="h-8 w-auto gap-2 rounded border-input bg-popover px-2.5 text-[13px] lowercase">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="lowercase">
-              {formatOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                  {option.value === "auto" && value && detectedFormat && (
-                    <span className="text-primary"> → {detectedFormat}</span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FormatSelect
+            side={side}
+            value={format}
+            onChange={onFormatChange}
+            detectedFormat={value ? detectedFormat : null}
+          />
         </div>
         {toolbarAction}
       </div>
-      <div className="flex min-h-0 flex-1">
-        <LineGutter ref={gutterRef} count={lineCount} />
-        <div className="relative min-w-0 flex-1">
-          {shouldHighlight(format) && readOnly ? (
-            <SyntaxHighlightedEditor
-              value={value}
-              onChange={onChange}
-              onScroll={handleScroll}
-              language={getHighlightLanguage(format)}
-              readOnly={readOnly}
-              placeholder={placeholder}
-            />
-          ) : (
-            <Textarea
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              onScroll={handleScroll}
-              wrap="off"
-              spellCheck={false}
-              className="h-full w-full resize-none whitespace-pre rounded-none border-0 bg-transparent py-3 pl-1 pr-3 font-mono text-sm leading-[1.5] md:leading-[1.5] caret-primary shadow-none placeholder:text-dim focus-visible:ring-0"
-              placeholder={placeholder}
-              readOnly={readOnly}
-            />
-          )}
+      <div className="relative min-h-0 min-w-0 flex-1">
+        <div className="absolute inset-0">
+          <CodeEditor
+            ref={editorRef}
+            value={value}
+            onChange={onChange}
+            readOnly={readOnly}
+            format={syntaxFormat}
+            errorLine={errorLine}
+            placeholder={placeholder}
+            onPasteText={onPasteText}
+            onDropText={onDropText}
+            ariaLabel={side === "in" ? "Input text" : "Output text"}
+          />
         </div>
+      </div>
+      <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto border-t px-3.5 py-1.5 text-xs empty:hidden">
+        {notices}
       </div>
       <div className="flex justify-between gap-3 border-t px-3.5 py-2 text-xs text-dim">
         <span className="shrink-0">
-          {value.length} chars · {formatByteSize(byteSize)}
+          {chars} chars · {formatByteSize(byteSize)}
         </span>
+        {footerNote && (
+          <span className="min-w-0 flex-1 truncate" title={footerNote}>
+            {footerNote}
+          </span>
+        )}
         {status}
       </div>
     </section>
