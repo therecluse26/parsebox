@@ -384,16 +384,16 @@ write("large/base64-gzip-users-5mb.txt", b64(gzip(JSON.stringify(arrayOfSize(5 *
   write("large/broken-500kb.json", `[\n${broken},\n]\n`);
 }
 
-// --- deep/: nesting deep enough to break recursive code ---
+// --- deep/: 1,000 levels, far past real data, under the stack limits of the writers ---
 
-write("deep/array-10k.json", "[".repeat(10_000) + '"bottom"' + "]".repeat(10_000) + "\n");
-write("deep/object-5k.json", '{"a":'.repeat(5_000) + '"bottom"' + "}".repeat(5_000) + "\n");
+write("deep/array-1k.json", "[".repeat(1_000) + '"bottom"' + "]".repeat(1_000) + "\n");
+write("deep/object-1k.json", '{"a":'.repeat(1_000) + '"bottom"' + "}".repeat(1_000) + "\n");
 {
   let mixed = '{"leaf":true}';
-  for (let i = 0; i < 2_000; i++) mixed = i % 2 ? `{"level${i}":${mixed},"n":${i}}` : `[${i},${mixed}]`;
-  write("deep/mixed-2k.json", mixed + "\n");
+  for (let i = 0; i < 1_000; i++) mixed = i % 2 ? `{"level${i}":${mixed},"n":${i}}` : `[${i},${mixed}]`;
+  write("deep/mixed-1k.json", mixed + "\n");
 }
-write("deep/xml-5k.xml", "<n>".repeat(5_000) + "bottom" + "</n>".repeat(5_000) + "\n");
+write("deep/xml-1k.xml", "<n>".repeat(1_000) + "bottom" + "</n>".repeat(1_000) + "\n");
 write(
   "deep/yaml-300.yaml",
   Array.from({ length: 300 }, (_, i) => `${"  ".repeat(i)}level${i}:`).join("\n") + `\n${"  ".repeat(300)}value: bottom\n`

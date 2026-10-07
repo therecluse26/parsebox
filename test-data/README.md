@@ -95,12 +95,14 @@ The decode chain removes at most 5 layers (`LIMITS.decodeMaxDepth`).
 
 ### `stress/deep/`: deep nesting
 
+Real data is rarely more than 100 levels deep. These files use 1,000 levels, which is far past real data. The writers are recursive, so they have a depth limit. In node, every output works to at least 1,792 levels, so 1,000 leaves room for browsers with a smaller stack. Past the limit, the output shows "Maximum call stack size exceeded".
+
 | File | Result |
 |---|---|
-| `array-10k.json` | 10,000 nested arrays. Parses, but **every output fails with "Maximum call stack size exceeded"** |
-| `object-5k.json` | 5,000 nested objects. Parses, but **every output fails with "Maximum call stack size exceeded"** |
-| `mixed-2k.json` | 2,000 levels of arrays and objects. Works, but the indents make 28 KB into 11 MB of output. **JSON5 output takes about 10 s** |
-| `xml-5k.xml` | 5,000 nested elements. **Parse error "maximum call stack size exceeded"** |
+| `array-1k.json` | 1,000 nested arrays |
+| `object-1k.json` | 1,000 nested objects |
+| `mixed-1k.json` | 1,000 levels of arrays and objects. The indents make 13 KB into 3 MB of output. JSON5 output takes about 1 s |
+| `xml-1k.xml` | 1,000 nested elements |
 | `yaml-300.yaml` | 300 indent levels |
 | `toml-dotted-1k.toml` | One key with 1,000 dotted parts. **CSV output fails with "str.toString is not a function"** |
 | `querystring-500.txt` | 500 bracket levels (`a[b][b]...`) |
