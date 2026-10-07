@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { formatOptions } from "../src/config/formats.ts";
 import { LIMITS } from "../src/config/limits.ts";
-import { generateTypes, highlightLanguageFor, isTypeFormat } from "../src/lib/typegen/index.ts";
+import { generateTypes, isTypeFormat } from "../src/lib/typegen/index.ts";
 
 const jsonDir = path.join(import.meta.dirname, "..", "test-data", "json");
 const typeFormats = formatOptions.filter((option) => option.group === "types").map((option) => option.value);
@@ -14,12 +14,8 @@ test("the type formats are output-only and known to typegen", () => {
   for (const format of typeFormats) {
     assert.equal(isTypeFormat(format), true, format);
     assert.equal(formatOptions.find((option) => option.value === format)?.io, "output", format);
-    assert.ok(highlightLanguageFor(format), `${format} has a highlight language`);
   }
   for (const format of ["auto", "json", "yaml", "csv", "base64"]) assert.equal(isTypeFormat(format), false, format);
-  assert.equal(highlightLanguageFor("go"), "go");
-  assert.equal(highlightLanguageFor("zod"), "typescript");
-  assert.equal(highlightLanguageFor("json"), null);
 });
 
 // Every type format writes something for every JSON sample

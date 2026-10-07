@@ -75,7 +75,7 @@ export function useConversion({ text, inputFormat, outputFormat, outputFormatLoc
         jobs.current.clear();
         setBusy(false);
         setResult((previous) =>
-          previous && { ...previous, output: "", outputHtml: null, outputError: `Conversion failed: ${event.message}` }
+          previous && { ...previous, output: "", outputError: `Conversion failed: ${event.message}` }
         );
       };
       workerRef.current = worker;

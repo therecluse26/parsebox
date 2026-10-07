@@ -30,8 +30,6 @@ export interface ConversionResult {
   id: number;
   /** The full output. The UI shows only the first LIMITS.displayMaxChars; copy uses all of it. */
   output: string;
-  /** highlight.js HTML for the output, or null when the format has no highlighting or the output is over the cap */
-  outputHtml: string | null;
 
   /** In auto mode: the detected format of the innermost layer. Otherwise null. */
   detectedFormat: string | null;

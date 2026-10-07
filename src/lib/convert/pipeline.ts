@@ -174,7 +174,6 @@ export function emptyResult(req: ConversionRequest): ConversionResult {
   return {
     id: req.id,
     output: "",
-    outputHtml: null,
     detectedFormat: null,
     inputFormatUsed: req.inputFormat,
     outputFormatUsed: req.outputFormat,

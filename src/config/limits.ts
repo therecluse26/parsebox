@@ -11,16 +11,14 @@ export const LIMITS = {
   instantMaxChars: 20_000,
 
   /**
-   * Pasted or dropped input over this size is kept out of the editable textarea:
-   * the pane shows a read-only preview of the first part and editing is off.
-   * The browser lays out textarea text at about 0.35 ms per KB and a native
-   * paste costs about 0.6 ms per KB, so this keeps a paste under about 200 ms.
+   * Pasted or dropped input over this size is kept out of the editor: the pane
+   * shows a read-only preview of the first part and editing is off. The editor
+   * draws only the lines in view, but every edit copies the whole text into
+   * React state and sends it to the worker.
    */
   largeInputChars: 250_000,
-  /** The output pane shows at most this much, for the same layout cost; copy still copies the full output */
+  /** The output pane shows at most this much; copy still copies the full output */
   displayMaxChars: 250_000,
-  /** Syntax highlighting runs only on output up to this size; highlighted text lays out at about 1.1 ms per KB */
-  highlightMaxChars: 150_000,
 
   /** jsonrepair runs only on invalid input up to this size */
   repairMaxChars: 20_000_000,

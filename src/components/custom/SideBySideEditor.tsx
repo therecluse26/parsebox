@@ -1,9 +1,7 @@
 import React, { useState, useRef, useMemo } from "react";
-import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeftRight, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SyntaxHighlightedEditor } from "./SyntaxHighlightedEditor";
-import { LineGutter } from "./LineGutter";
+import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
 import { FormatSelect } from "./FormatSelect";
 import { DecodeChain } from "./notices/DecodeChain";
 import { RepairNotice } from "./notices/RepairNotice";
@@ -42,7 +40,7 @@ export default function SideBySideEditor() {
   const [isOutputFormatManuallySet, setIsOutputFormatManuallySet] = useState(false);
   const [redactSecrets, setRedactSecrets] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<CodeEditorHandle>(null);
 
   const { result, busy } = useConversion({
     text: inputText,
@@ -59,16 +57,18 @@ export default function SideBySideEditor() {
   const parseError = result?.parseError ?? null;
   // Error positions refer to the innermost layer, which is not the text in the input pane
   const errorLine = parseError?.line !== undefined && result?.decodeChain.length === 0 ? parseError.line : undefined;
+  // The format that colours the input pane; none when a decode chain means the pane shows encoded text
+  const inputSyntaxFormat =
+    inputFormat !== "auto" ? inputFormat : result?.decodeChain.length === 0 ? result.inputFormatUsed : null;
 
   const output = result?.output ?? "";
   const displayOutput = useMemo(
     () => (output.length > LIMITS.displayMaxChars ? output.slice(0, LIMITS.displayMaxChars) : output),
     [output]
   );
-  // The text in the input textarea; never the whole of a large input
+  // The text in the input pane; never the whole of a large input
   const shownInput = useMemo(() => (largeInput ? previewOf(inputText) : inputText), [inputText, largeInput]);
   const inputLines = useMemo(() => countLines(shownInput), [shownInput]);
-  const outputLines = useMemo(() => countLines(displayOutput), [displayOutput]);
   const hasInput = useMemo(() => /\S/.test(inputText), [inputText]);
   // Byte counts come from the worker, so big input is never encoded on the main thread
   const inputBytes = result?.inputBytes ?? 0;
@@ -80,24 +80,21 @@ export default function SideBySideEditor() {
     setLargeInput(text.length > LIMITS.largeInputChars);
   };
 
-  // A paste that would make the input large skips the textarea, whose layout of megabytes freezes the page.
+  // A paste that would make the input large skips the editor and goes to the read-only preview.
   // The preview is read-only, so a paste there replaces the whole input.
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const pasted = e.clipboardData.getData("text/plain");
-    if (!largeInput && inputText.length + pasted.length <= LIMITS.largeInputChars) return;
-    const { selectionStart, selectionEnd } = e.currentTarget;
-    const next = largeInput ? pasted : inputText.slice(0, selectionStart) + pasted + inputText.slice(selectionEnd);
-    if (!largeInput && next.length <= LIMITS.largeInputChars) return;
-    e.preventDefault();
+  const handlePaste = (pasted: string, from: number, to: number) => {
+    if (!largeInput && inputText.length + pasted.length <= LIMITS.largeInputChars) return false;
+    const next = largeInput ? pasted : inputText.slice(0, from) + pasted + inputText.slice(to);
+    if (!largeInput && next.length <= LIMITS.largeInputChars) return false;
     replaceInput(next);
+    return true;
   };
 
   // Dropped text that would make the input large replaces it, like a paste into the preview
-  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    const dropped = e.dataTransfer.getData("text/plain");
-    if (!dropped || (!largeInput && inputText.length + dropped.length <= LIMITS.largeInputChars)) return;
-    e.preventDefault();
+  const handleDrop = (dropped: string) => {
+    if (!largeInput && inputText.length + dropped.length <= LIMITS.largeInputChars) return false;
     replaceInput(dropped);
+    return true;
   };
 
   const handleOutputFormatChange = (newFormat: string) => {
@@ -143,21 +140,7 @@ export default function SideBySideEditor() {
 
   // Put the caret on the error and scroll it into view
   const jumpToError = () => {
-    const textarea = inputRef.current;
-    if (!textarea || errorLine === undefined) return;
-    let start = 0;
-    for (let line = 1; line < errorLine; line++) {
-      const next = shownInput.indexOf("\n", start);
-      if (next === -1) break;
-      start = next + 1;
-    }
-    const lineEnd = shownInput.indexOf("\n", start);
-    const column = Math.max((parseError?.column ?? 1) - 1, 0);
-    const caret = Math.min(start + column, lineEnd === -1 ? shownInput.length : lineEnd);
-    textarea.focus();
-    textarea.setSelectionRange(caret, caret);
-    const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 21;
-    textarea.scrollTop = Math.max(0, (errorLine - 1) * lineHeight - textarea.clientHeight / 3);
+    if (errorLine !== undefined) inputRef.current?.jumpTo(errorLine, parseError?.column ?? 1);
   };
 
   const activeFormatLabel = inputFormat === "auto" ? detectedFormat : formatLabel(inputFormat);
@@ -215,16 +198,16 @@ export default function SideBySideEditor() {
         side="in"
         value={shownInput}
         onChange={setInputText}
-        onPaste={handlePaste}
-        onDrop={handleDrop}
-        textareaRef={inputRef}
+        onPasteText={handlePaste}
+        onDropText={handleDrop}
+        editorRef={inputRef}
+        syntaxFormat={inputSyntaxFormat}
         format={inputFormat}
         onFormatChange={handleInputFormatChange}
         readOnly={largeInput}
         detectedFormat={detectedFormat}
         chars={inputText.length}
         byteSize={inputBytes}
-        lineCount={inputLines}
         errorLine={errorLine}
         status={inputStatus}
         notices={
@@ -266,13 +249,12 @@ export default function SideBySideEditor() {
       <EditorPane
         side="out"
         value={displayOutput}
-        html={result?.outputHtml ?? null}
+        syntaxFormat={activeOutputFormat}
         format={activeOutputFormat}
         onFormatChange={handleOutputFormatChange}
         readOnly={true}
         chars={output.length}
         byteSize={outputBytes}
-        lineCount={outputLines}
         status={outputStatus}
         footerNote={outputNotes.join(" · ")}
         notices={<LossReport losses={result?.losses ?? null} />}
@@ -309,17 +291,16 @@ interface EditorPaneProps {
   /** The text shown, which for the output can be a slice of the full output */
   value: string;
   onChange?: (value: string) => void;
-  onPaste?: React.ClipboardEventHandler<HTMLTextAreaElement>;
-  onDrop?: React.DragEventHandler<HTMLTextAreaElement>;
-  /** highlight.js HTML for `value`; shown instead of the textarea when present */
-  html?: string | null;
-  textareaRef?: React.Ref<HTMLTextAreaElement>;
+  onPasteText?: (text: string, from: number, to: number) => boolean;
+  onDropText?: (text: string) => boolean;
+  editorRef?: React.Ref<CodeEditorHandle>;
+  /** The format that picks the highlighting and folding; null for plain text */
+  syntaxFormat: string | null;
   format: string;
   onFormatChange: (value: string) => void;
   readOnly: boolean;
   chars: number;
   byteSize: number;
-  lineCount: number;
   errorLine?: number;
   status: React.ReactNode;
   /** Dim text after the size in the footer */
@@ -334,16 +315,15 @@ function EditorPane({
   side,
   value,
   onChange,
-  onPaste,
-  onDrop,
-  html,
-  textareaRef,
+  onPasteText,
+  onDropText,
+  editorRef,
+  syntaxFormat,
   format,
   onFormatChange,
   readOnly,
   chars,
   byteSize,
-  lineCount,
   errorLine,
   status,
   footerNote,
@@ -351,15 +331,7 @@ function EditorPane({
   toolbarAction,
   detectedFormat,
 }: EditorPaneProps) {
-  const gutterRef = useRef<HTMLDivElement>(null);
-  const placeholder = readOnly ? "output will appear here..." : "paste or type anything...";
-
-  // Keep the line numbers aligned with the scrolled text
-  const handleScroll = (e: React.UIEvent<HTMLElement>) => {
-    if (gutterRef.current) {
-      gutterRef.current.scrollTop = e.currentTarget.scrollTop;
-    }
-  };
+  const placeholder = side === "out" ? "output will appear here..." : "paste or type anything...";
 
   return (
     <section
@@ -378,28 +350,20 @@ function EditorPane({
         </div>
         {toolbarAction}
       </div>
-      <div className="flex min-h-0 flex-1">
-        <LineGutter ref={gutterRef} count={lineCount} errorLine={errorLine} />
-        <div className="relative min-w-0 flex-1">
-          {html && value ? (
-            <SyntaxHighlightedEditor html={html} onScroll={handleScroll} />
-          ) : (
-            <Textarea
-              ref={textareaRef}
-              value={value}
-              onChange={(e) => onChange?.(e.target.value)}
-              onPaste={onPaste}
-              onDrop={onDrop}
-              // A read-only textarea refuses drops unless dragover is cancelled
-              onDragOver={onDrop && readOnly ? (e) => e.preventDefault() : undefined}
-              onScroll={handleScroll}
-              wrap="off"
-              spellCheck={false}
-              className="h-full w-full resize-none whitespace-pre rounded-none border-0 bg-transparent py-3 pl-1 pr-3 font-mono text-sm leading-[1.5] md:leading-[1.5] caret-primary shadow-none placeholder:text-dim focus-visible:ring-0"
-              placeholder={placeholder}
-              readOnly={readOnly}
-            />
-          )}
+      <div className="relative min-h-0 min-w-0 flex-1">
+        <div className="absolute inset-0">
+          <CodeEditor
+            ref={editorRef}
+            value={value}
+            onChange={onChange}
+            readOnly={readOnly}
+            format={syntaxFormat}
+            errorLine={errorLine}
+            placeholder={placeholder}
+            onPasteText={onPasteText}
+            onDropText={onDropText}
+            ariaLabel={side === "in" ? "Input text" : "Output text"}
+          />
         </div>
       </div>
       <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto border-t px-3.5 py-1.5 text-xs empty:hidden">
