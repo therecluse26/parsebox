@@ -5,6 +5,8 @@ export interface PeelResult {
   text: string;
   /** Layers removed, outermost first; empty when the input had no layers */
   steps: DecodeStep[];
+  /** The detected format of `text` when peeling already ran detection on it, so the pipeline does not detect twice */
+  format: string | null;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface PeelResult {
  * STUB: removes nothing. The decode-chain feature replaces this body.
  */
 export async function peelLayers(text: string): Promise<PeelResult> {
-  return { text, steps: [] };
+  return { text, steps: [], format: null };
 }
 
 /**
