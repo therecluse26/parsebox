@@ -126,7 +126,8 @@ export async function runConversion(
 
   result.detectedFormat = auto ? format : null;
   result.inputFormatUsed = format;
-  result.outputFormatUsed = followedOutputFormat(req, format);
+  // MessagePack found under a decoded layer shows as JSON; following it would echo the Base64 back
+  result.outputFormatUsed = followedOutputFormat(req, result.decodeChain.length > 0 && format === "msgpack" ? "json" : format);
   if (!parsed) return finish(result, req.text, started);
 
   // Secrets

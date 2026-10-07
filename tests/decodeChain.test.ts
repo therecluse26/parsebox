@@ -4,6 +4,8 @@ import zlib from "node:zlib";
 import { decodeJwt, peelLayers } from "../src/lib/decodeChain.ts";
 import { detectFormat } from "../src/lib/detectFormat.ts";
 import { LIMITS } from "../src/config/limits.ts";
+import { runConversion } from "../src/lib/convert/pipeline.ts";
+import { encode as msgpackEncode } from "@msgpack/msgpack";
 
 const sample = { users: [{ id: 1, name: "Ada", email: "ada@example.com", tags: ["admin", "ops"] }], ok: true };
 const json = JSON.stringify(sample);
@@ -180,8 +182,26 @@ test("binary (non-UTF-8) bytes stop the chain", async () => {
   const encoded = b64(bytes);
   const result = await assertPeels(encoded, [], "base64", encoded);
   assert.equal(result.text, encoded);
-  // gzip of binary: the whole base64 + gzip layer stays
-  await assertPeels(b64(zlib.gzipSync(bytes)), [], "base64");
+});
+
+test("gzip of binary peels to the raw bytes, and gzip of MessagePack to MessagePack", async () => {
+  const bytes = Uint8Array.from({ length: 64 }, (_, i) => (i * 37 + 0x80) & 0xff);
+  await assertPeels(b64(zlib.gzipSync(bytes)), ["base64", "gzip"], "base64", b64(bytes));
+  const packed = msgpackEncode({ id: 1, tags: ["a", "b"], blob: new Uint8Array([0xff, 0x00]) });
+  await assertPeels(b64(zlib.gzipSync(packed)), ["base64", "gzip"], "msgpack", b64(packed));
+});
+
+test("the pipeline shows gzip of MessagePack as JSON and gzip of binary as Base64", async () => {
+  const request = { id: 1, inputFormat: "auto", outputFormat: "text", outputFormatLocked: false, options: { redactSecrets: false } };
+  const packed = b64(zlib.gzipSync(msgpackEncode({ id: 1, tags: ["a", "b"] })));
+  const fromPacked = await runConversion({ ...request, text: packed });
+  assert.equal(fromPacked.outputFormatUsed, "json");
+  assert.deepEqual(JSON.parse(fromPacked.output), { id: 1, tags: ["a", "b"] });
+
+  const bytes = Uint8Array.from({ length: 64 }, (_, i) => (i * 37 + 0x80) & 0xff);
+  const fromBinary = await runConversion({ ...request, text: b64(zlib.gzipSync(bytes)) });
+  assert.equal(fromBinary.outputFormatUsed, "base64");
+  assert.equal(fromBinary.output, b64(bytes));
 });
 
 test("MessagePack stays a terminal format", async () => {

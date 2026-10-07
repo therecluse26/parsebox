@@ -1,6 +1,8 @@
 import type { DecodeStep } from "./convert/types.ts";
 import { LIMITS } from "../config/limits.ts";
 import { detectFormat } from "./detectFormat.ts";
+import { decode as msgpackDecode } from "@msgpack/msgpack";
+import { bytesToBase64 } from "./convert/bytes.ts";
 
 export interface PeelResult {
   /** The innermost text after all layers are removed */
@@ -277,7 +279,10 @@ async function peelBytes(
   try {
     text = utf8.decode(bytes);
   } catch {
-    return null;
+    if (!compressed) return null;
+    // Decompressed bytes that are not text: MessagePack when they decode as it, otherwise
+    // raw bytes. Both go on as Base64, which is what their readers take.
+    return { text: bytesToBase64(bytes), steps, format: isMsgpack(bytes) ? "msgpack" : "base64" };
   }
   if (compressed) return { text, steps, format: null };
 
@@ -294,6 +299,16 @@ async function peelBytes(
     return { text, steps, format: null };
   }
   return null;
+}
+
+// A whole MessagePack document holding an object or array (a lone number or string is too easy to hit by chance)
+function isMsgpack(bytes: Uint8Array): boolean {
+  try {
+    const value = msgpackDecode(bytes);
+    return typeof value === "object" && value !== null && !ArrayBuffer.isView(value);
+  } catch {
+    return false;
+  }
 }
 
 // Short decoded text: printable ASCII and at least 80% letters, digits and whitespace, so random bytes are rejected
