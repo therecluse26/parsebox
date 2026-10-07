@@ -95,9 +95,6 @@ const K = {
   binaryDropped: "binary data dropped",
   binaryNumbers: "binary data became numbers",
   latin1: "strings with characters above U+00FF garbled",
-  queryArray: "arrays over 20 items read back as objects",
-  queryDepth: "values nested over 6 levels read back flat",
-  queryLimit: "pairs after the first 1,000 dropped on read",
 } as const;
 
 // A plural noun in the first two words of a kind; for a count of 1 it turns singular
@@ -116,9 +113,9 @@ export function kindForCount(kind: string, count: number): string {
 const ORDER: string[] = [
   K.rootDropped, K.rootSplit, K.rootArrayText, K.rootArrayObject, K.rootKeys,
   K.columnDropped, K.rowDropped, K.objectString, K.dateDropped, K.binaryDropped,
-  K.keyMangled, K.cut, K.queryLimit, K.queryDepth, K.attrDropped,
+  K.keyMangled, K.cut, K.attrDropped,
   K.emptyArray, K.emptyObject, K.emptyObjectText, K.jsonText, K.arrayJoined,
-  K.nestedArray, K.queryArray, K.singleArray, K.textOnly, K.dateMangled, K.latin1,
+  K.nestedArray, K.singleArray, K.textOnly, K.dateMangled, K.latin1,
   K.stripped, K.trimmed, K.carriageReturn, K.backslash, K.nullEmpty, K.nullText, K.nanNull,
   K.binaryNumbers, K.retypedXml, K.retypedIni, K.numberText, K.attrText, K.dateString,
 ];
@@ -509,12 +506,8 @@ function iniArrayItems(c: Collector, items: unknown[]): void {
   }
 }
 
-// --- Query string (qs.stringify / qs.parse with default options) -----------------
+// --- Query string (qs.stringify / qs.parse with the reader's lifted limits) -----
 
-/** qs.parse defaults: arrayLimit 20, depth 5, parameterLimit 1000 */
-const QS_ARRAY_LIMIT = 20;
-const QS_MAX_PATH = 6;
-const QS_PARAMETER_LIMIT = 1000;
 const QS_TOP_BRACKETS = /\[[^[\]]*]/;
 
 function queryLosses(c: Collector, value: unknown): void {
@@ -526,13 +519,6 @@ function queryLosses(c: Collector, value: unknown): void {
   if (Array.isArray(value) || isBinary(value)) addRoot(c, K.rootArrayObject);
   if (isBinary(value)) return;
 
-  let pairs = 0;
-  const pair = (depth: number, extra?: Seg) => {
-    pairs++;
-    if (pairs > QS_PARAMETER_LIMIT) add(c, K.queryLimit, extra);
-    else if (depth > QS_MAX_PATH) add(c, K.queryDepth, extra);
-  };
-
   walk(c, value, (v, key, depth) => {
     if (depth === 0) return true;
     // qs reads [...] in a key as nesting, and an empty key as an array push or nothing
@@ -543,18 +529,14 @@ function queryLosses(c: Collector, value: unknown): void {
     if (v !== null && typeof v === "object" && !isDate(v)) {
       if (isBinary(v)) {
         add(c, K.binaryNumbers);
-        const length = (v as unknown as ArrayLike<number>).length ?? 0;
-        for (let i = 0; i < length; i++) pair(depth + 1, i);
         return false;
       }
       if (isEmpty(v)) {
         add(c, Array.isArray(v) ? K.emptyArray : K.emptyObject);
         return false;
       }
-      if (Array.isArray(v) && v.length > QS_ARRAY_LIMIT) add(c, K.queryArray);
       return true;
     }
-    pair(depth);
     if (v === null) add(c, K.nullEmpty);
     else if (isDate(v)) c.sawDate = true;
     else if (typeof v !== "string") c.sawTyped = true;

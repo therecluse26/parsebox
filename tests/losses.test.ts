@@ -1,80 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
-import { XMLParser, XMLBuilder } from "fast-xml-parser";
+import { XMLParser } from "fast-xml-parser";
 import yaml from "js-yaml";
-import { encode as toonEncode, decode as toonDecode } from "@toon-format/toon";
 import JSON5 from "json5";
 import TOML from "@ltd/j-toml";
 import ini from "ini";
-import { encode as msgpackEncode, decode as msgpackDecode } from "@msgpack/msgpack";
-import { parse as dotenvParse } from "dotenv";
-import qs from "qs";
-import Papa from "papaparse";
 import { collectLosses, kindForCount, xmlReadsAsNumber } from "../src/lib/losses.ts";
+import { parseText } from "../src/lib/convert/parse.ts";
+import { stringifyValue } from "../src/lib/convert/stringify.ts";
 import { TOML_PARSE_OPTIONS } from "../src/lib/detectFormat.ts";
 
-// The app's readers and writers, as in SideBySideEditor (parseInput / stringifyOutput)
+// The app's real readers and writers
 
 const kindOf = (v: unknown) =>
   Array.isArray(v) ? "array" : typeof v === "object" && v !== null ? "object" : "primitive";
 
-function write(value: any, format: string): string {
-  const type = kindOf(value);
-  const asText = () => (type === "primitive" ? value : JSON.stringify(value));
-  switch (format) {
-    case "json": return JSON.stringify(value, null, 2);
-    case "json5": return JSON5.stringify(value, null, 2);
-    case "xml":
-      return new XMLBuilder({ ignoreAttributes: false, format: true, attributeNamePrefix: "@_", textNodeName: "#text" })
-        .build(type === "array" ? { root: { item: value } } : value);
-    case "yaml": return yaml.dump(value);
-    case "toml":
-      if (type !== "object") throw new Error("TOML requires an object at the root");
-      return TOML.stringify(value, { newline: "\n", integer: Number.MAX_SAFE_INTEGER }) as unknown as string;
-    case "toon": return toonEncode(value);
-    case "ini": return ini.stringify(value);
-    case "dotenv":
-      return type === "object" ? Object.entries(value).map(([k, v]) => `${k}=${v}`).join("\n") : String(value);
-    case "csv": return Papa.unparse(type === "array" ? value : [value]);
-    case "tsv": return Papa.unparse(type === "array" ? value : [value], { delimiter: "\t" });
-    case "jsonl": return (type === "array" ? value : [value]).map((item: unknown) => JSON.stringify(item)).join("\n");
-    case "msgpack": {
-      const bytes = msgpackEncode(value);
-      let s = "";
-      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-      return btoa(s);
-    }
-    case "hex": return asText().split("").map((ch: string) => ch.charCodeAt(0).toString(16).padStart(2, "0")).join("");
-    case "binary": return asText().split("").map((ch: string) => ch.charCodeAt(0).toString(2).padStart(8, "0")).join(" ");
-    case "querystring": return qs.stringify(value);
-    default: return type === "primitive" ? value : JSON.stringify(value);
-  }
-}
-
-function read(text: string, format: string): any {
-  const jsonOrText = (s: string | undefined) => {
-    try { return JSON.parse(s as string); } catch { return s; }
-  };
-  switch (format) {
-    case "json": return JSON.parse(text);
-    case "json5": return JSON5.parse(text);
-    case "xml": return new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", textNodeName: "#text" }).parse(text);
-    case "yaml": return yaml.load(text);
-    case "toml": return TOML.parse(text, TOML_PARSE_OPTIONS);
-    case "toon": return toonDecode(text);
-    case "ini": return ini.parse(text);
-    case "dotenv": return dotenvParse(text);
-    case "csv": return Papa.parse(text, { header: true }).data;
-    case "tsv": return Papa.parse(text, { header: true, delimiter: "\t" }).data;
-    case "jsonl": return text.trim().split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line));
-    case "msgpack": return msgpackDecode(Uint8Array.from(atob(text), (ch) => ch.charCodeAt(0)));
-    case "hex": return jsonOrText(text.replace(/\s/g, "").match(/.{1,2}/g)?.map((b) => String.fromCharCode(parseInt(b, 16))).join(""));
-    case "binary": return jsonOrText(text.replace(/\s/g, "").match(/.{1,8}/g)?.map((b) => String.fromCharCode(parseInt(b, 2))).join(""));
-    case "querystring": return qs.parse(text.trim(), { ignoreQueryPrefix: true });
-    default: return text;
-  }
-}
+const write = (value: unknown, format: string): string => stringifyValue(value, format);
+const read = (text: string, format: string): any => parseText(text, format);
 
 // --- Helpers --------------------------------------------------------------------
 
@@ -309,11 +252,10 @@ test("ini → ini keeps everything but comments", () => {
 
 // --- Query string -----------------------------------------------------------------
 
-test("querystring: nulls, empty containers, bracket keys, reader limits", () => {
-  const deep = { k1: { k2: { k3: { k4: { k5: { k6: { k7: "x" } } } } } } };
+test("querystring: nulls, empty containers, bracket keys", () => {
   const value = {
     n: null, e: [], o: {}, keep: { e: [] }, "x[y]": "1", "a]": "ok",
-    inner: { "b[": "1" }, big: Array.from({ length: 21 }, (_, i) => String(i)), ok: Array.from({ length: 20 }, () => "v"), ...deep,
+    inner: { "b[": "1" }, ok: Array.from({ length: 20 }, () => "v"),
   };
   const { report } = verifyClaims(value, "json", "querystring");
   assert.deepEqual(kinds(report), {
@@ -321,17 +263,21 @@ test("querystring: nulls, empty containers, bracket keys, reader limits", () => 
     "empty arrays dropped": 2,
     "empty objects dropped": 1,
     "keys mangled": 2,
-    "arrays over 20 items read back as objects": 1,
-    "values nested over 6 levels read back flat": 1,
   });
 });
 
-test("querystring: pairs after the first 1,000 are dropped on read", () => {
-  const value: Record<string, string> = {};
+test("querystring: long arrays, deep keys and many pairs read back whole", () => {
+  const value: Record<string, unknown> = {
+    big: Array.from({ length: 50 }, (_, i) => String(i)),
+    deep: { k1: { k2: { k3: { k4: { k5: { k6: { k7: { k8: "x" } } } } } } } },
+  };
   for (let i = 0; i < 1005; i++) value["k" + i] = "v";
-  const { report } = verifyClaims(value, "json", "querystring");
-  assert.deepEqual(kinds(report), { "pairs after the first 1,000 dropped on read": 5 });
-  assert.equal(report?.items[0].examples[0], "k1000");
+  assert.equal(collectLosses(value, "json", "querystring")?.items.length ?? 0, 0);
+  assert.deepEqual(read(write(value, "querystring"), "querystring"), value);
+});
+
+test("querystring: a huge array index stays an object", () => {
+  assert.deepEqual(read("a[99999999]=1&b=2", "querystring"), { a: { 99999999: "1" }, b: "2" });
 });
 
 test("querystring: root arrays become objects and root text is dropped", () => {
@@ -449,9 +395,13 @@ test("hex and binary garble characters above U+00FF", () => {
 
 test("deep values do not overflow the stack", () => {
   let value: any = "leaf";
-  for (let i = 0; i < 200_000; i++) value = { k: value };
-  const report = collectLosses(value, "json", "querystring");
-  assert.equal(report?.items[0].kind, "values nested over 6 levels read back flat");
+  let withNull: any = null;
+  for (let i = 0; i < 200_000; i++) {
+    value = { k: value };
+    withNull = { k: withNull };
+  }
+  // The walk reaches the null at the bottom
+  assert.equal(collectLosses(withNull, "json", "querystring")?.items[0].kind, "nulls became empty text");
   assert.equal(collectLosses(value, "json", "xml"), null);
   assert.equal(collectLosses(value, "yaml", "json")?.items.length, 0);
 });

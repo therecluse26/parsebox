@@ -67,7 +67,7 @@ export function parseText(text: string, format: string): unknown {
     case "uri":
       return jsonOrString(decodeURIComponent(text));
     case "querystring":
-      return qs.parse(text.trim(), { ignoreQueryPrefix: true });
+      return parseQueryString(text.trim());
     case "jwt":
       return decodeJwt(text);
     default:
@@ -82,6 +82,16 @@ function parseJsonl(text: string): unknown[] {
     .split("\n")
     .filter((line) => line.trim())
     .map((line) => JSON.parse(line));
+}
+
+// qs's defaults turn arrays over 20 items into objects, flatten keys nested over 5
+// levels and drop pairs after 1,000. The writer produces all of these, so lift the
+// limits. An array index can still not exceed the pair count, so `a[99999999]=1`
+// stays an object and cannot allocate a huge array.
+function parseQueryString(query: string): unknown {
+  let pairs = 1;
+  for (let i = query.indexOf("&"); i !== -1; i = query.indexOf("&", i + 1)) pairs++;
+  return qs.parse(query, { ignoreQueryPrefix: true, depth: Infinity, parameterLimit: Infinity, arrayLimit: pairs });
 }
 
 // Decoded encodings become structured data when they hold JSON, otherwise they stay text
