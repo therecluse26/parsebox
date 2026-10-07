@@ -100,6 +100,18 @@ const K = {
   queryLimit: "pairs after the first 1,000 dropped on read",
 } as const;
 
+// A plural noun in the first two words of a kind; for a count of 1 it turns singular
+const PLURAL = /^(\S+ )?(values|objects|arrays|rows|keys|nulls|strings|returns|backslashes|attributes|dates|numbers|pairs)\b/;
+
+/** A kind as it reads after `count`: "1 nested object written as …", "2 nested objects written as …" */
+export function kindForCount(kind: string, count: number): string {
+  // Root kinds describe the whole document and always count 1
+  if (count !== 1 || kind.startsWith("root ")) return kind;
+  return kind.replace(PLURAL, (_, lead = "", noun: string) =>
+    lead + (noun === "backslashes" ? "backslash" : noun.slice(0, -1))
+  );
+}
+
 /** Most severe first: whole values lost, then structure changed, then types changed */
 const ORDER: string[] = [
   K.rootDropped, K.rootSplit, K.rootArrayText, K.rootArrayObject, K.rootKeys,

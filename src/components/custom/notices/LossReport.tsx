@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { LossReport as LossReportData } from "@/lib/convert/types";
+import { kindForCount } from "@/lib/losses";
 import { cn } from "@/lib/utils";
 
 const formatCount = (count: number) => count.toLocaleString("en-US");
@@ -13,7 +14,7 @@ export function LossReport({ losses }: { losses: LossReportData | null }) {
 
   const lossy = losses.items.length > 0;
   const summary = lossy
-    ? losses.items.map((item) => `${formatCount(item.count)} ${item.kind}`).join(", ")
+    ? losses.items.map((item) => `${formatCount(item.count)} ${kindForCount(item.kind, item.count)}`).join(", ")
     : losses.rules.join("; ");
 
   return (
@@ -38,7 +39,7 @@ export function LossReport({ losses }: { losses: LossReportData | null }) {
             <ul className="space-y-1">
               {losses.items.map((item) => (
                 <li key={item.kind}>
-                  <span className="text-foreground">{formatCount(item.count)}</span> {item.kind}
+                  <span className="text-foreground">{formatCount(item.count)}</span> {kindForCount(item.kind, item.count)}
                   {item.examples.length > 0 && (
                     <div className="break-all font-mono text-dim">
                       {item.examples.map((path) => path || "(root)").join(", ")}

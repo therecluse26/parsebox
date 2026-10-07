@@ -9,6 +9,7 @@ import { DecodeChain } from "./notices/DecodeChain";
 import { RepairNotice } from "./notices/RepairNotice";
 import { SecretsNotice } from "./notices/SecretsNotice";
 import { LossReport } from "./notices/LossReport";
+import { LargeInputNotice } from "./notices/LargeInputNotice";
 import { formatLabel, isInputOnly, isOutputOnly } from "@/config/formats";
 import { LIMITS } from "@/config/limits";
 import { countLines, sizeLabel } from "@/lib/convert/measure";
@@ -21,12 +22,20 @@ const formatByteSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
 };
 
+// The read-only preview of a large input: its first LIMITS.largeInputChars, cut at a line break when one is near
+const previewOf = (text: string) => {
+  const cut = text.lastIndexOf("\n", LIMITS.largeInputChars);
+  return text.slice(0, cut > LIMITS.largeInputChars / 2 ? cut : LIMITS.largeInputChars);
+};
+
 // "secret scan (over 10 MB)" → "secret scan skipped (over 10 MB)"
 const skippedNote = (item: string) =>
   item.includes(" (") ? item.replace(" (", " skipped (") : `${item} skipped`;
 
 export default function SideBySideEditor() {
   const [inputText, setInputText] = useState("");
+  // True for pasted, dropped or swapped input over LIMITS.largeInputChars: the pane shows a read-only preview
+  const [largeInput, setLargeInput] = useState(false);
   const [inputFormat, setInputFormat] = useState("auto");
   const [outputFormat, setOutputFormat] = useState("text");
   // False: in auto mode the output format follows the detected format
@@ -56,12 +65,40 @@ export default function SideBySideEditor() {
     () => (output.length > LIMITS.displayMaxChars ? output.slice(0, LIMITS.displayMaxChars) : output),
     [output]
   );
-  const inputLines = useMemo(() => countLines(inputText), [inputText]);
+  // The text in the input textarea; never the whole of a large input
+  const shownInput = useMemo(() => (largeInput ? previewOf(inputText) : inputText), [inputText, largeInput]);
+  const inputLines = useMemo(() => countLines(shownInput), [shownInput]);
   const outputLines = useMemo(() => countLines(displayOutput), [displayOutput]);
   const hasInput = useMemo(() => /\S/.test(inputText), [inputText]);
   // Byte counts come from the worker, so big input is never encoded on the main thread
   const inputBytes = result?.inputBytes ?? 0;
   const outputBytes = result?.outputBytes ?? 0;
+
+  // Every path that replaces the whole input: large text goes to the read-only preview
+  const replaceInput = (text: string) => {
+    setInputText(text);
+    setLargeInput(text.length > LIMITS.largeInputChars);
+  };
+
+  // A paste that would make the input large skips the textarea, whose layout of megabytes freezes the page.
+  // The preview is read-only, so a paste there replaces the whole input.
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData("text/plain");
+    if (!largeInput && inputText.length + pasted.length <= LIMITS.largeInputChars) return;
+    const { selectionStart, selectionEnd } = e.currentTarget;
+    const next = largeInput ? pasted : inputText.slice(0, selectionStart) + pasted + inputText.slice(selectionEnd);
+    if (!largeInput && next.length <= LIMITS.largeInputChars) return;
+    e.preventDefault();
+    replaceInput(next);
+  };
+
+  // Dropped text that would make the input large replaces it, like a paste into the preview
+  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    const dropped = e.dataTransfer.getData("text/plain");
+    if (!dropped || (!largeInput && inputText.length + dropped.length <= LIMITS.largeInputChars)) return;
+    e.preventDefault();
+    replaceInput(dropped);
+  };
 
   const handleOutputFormatChange = (newFormat: string) => {
     setOutputFormat(newFormat);
@@ -85,7 +122,7 @@ export default function SideBySideEditor() {
   const handleSwap = () => {
     if (swapBlockedReason) return;
     const previousInputFormat = inputFormat === "auto" ? result?.inputFormatUsed ?? "text" : inputFormat;
-    setInputText(output);
+    replaceInput(output);
     setInputFormat(activeOutputFormat);
     setOutputFormat(isInputOnly(previousInputFormat) ? "json" : previousInputFormat);
     // The new input format is never auto, so the output format stays as set
@@ -110,13 +147,13 @@ export default function SideBySideEditor() {
     if (!textarea || errorLine === undefined) return;
     let start = 0;
     for (let line = 1; line < errorLine; line++) {
-      const next = inputText.indexOf("\n", start);
+      const next = shownInput.indexOf("\n", start);
       if (next === -1) break;
       start = next + 1;
     }
-    const lineEnd = inputText.indexOf("\n", start);
+    const lineEnd = shownInput.indexOf("\n", start);
     const column = Math.max((parseError?.column ?? 1) - 1, 0);
-    const caret = Math.min(start + column, lineEnd === -1 ? inputText.length : lineEnd);
+    const caret = Math.min(start + column, lineEnd === -1 ? shownInput.length : lineEnd);
     textarea.focus();
     textarea.setSelectionRange(caret, caret);
     const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 21;
@@ -129,8 +166,9 @@ export default function SideBySideEditor() {
   if (hasInput && result) {
     if (parseError) {
       const message = parseError.hint ? `${parseError.message} · ${parseError.hint}` : parseError.message;
+      // A large input's error can lie past the preview, where there is nothing to jump to
       inputStatus =
-        errorLine !== undefined ? (
+        errorLine !== undefined && errorLine <= inputLines ? (
           <button
             type="button"
             className="min-w-0 truncate text-left hover:underline"
@@ -175,12 +213,14 @@ export default function SideBySideEditor() {
     <div className="flex h-full flex-col gap-3 px-4 py-4 md:flex-row md:px-7 md:pb-7 md:pt-5">
       <EditorPane
         side="in"
-        value={inputText}
+        value={shownInput}
         onChange={setInputText}
+        onPaste={handlePaste}
+        onDrop={handleDrop}
         textareaRef={inputRef}
         format={inputFormat}
         onFormatChange={handleInputFormatChange}
-        readOnly={false}
+        readOnly={largeInput}
         detectedFormat={detectedFormat}
         chars={inputText.length}
         byteSize={inputBytes}
@@ -189,6 +229,9 @@ export default function SideBySideEditor() {
         status={inputStatus}
         notices={
           <>
+            {largeInput && (
+              <LargeInputNotice chars={inputText.length} shown={shownInput.length} onClear={() => replaceInput("")} />
+            )}
             <DecodeChain steps={result?.decodeChain ?? []} innerFormat={result?.detectedFormat ?? null} />
             <RepairNotice repair={result?.repair ?? null} />
             <SecretsNotice secrets={result?.secrets ?? null} redact={redactSecrets} onRedactChange={setRedactSecrets} />
@@ -199,7 +242,7 @@ export default function SideBySideEditor() {
             variant="ghost"
             size="sm"
             className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => setInputText("")}
+            onClick={() => replaceInput("")}
             disabled={!inputText}
           >
             clear
@@ -266,6 +309,8 @@ interface EditorPaneProps {
   /** The text shown, which for the output can be a slice of the full output */
   value: string;
   onChange?: (value: string) => void;
+  onPaste?: React.ClipboardEventHandler<HTMLTextAreaElement>;
+  onDrop?: React.DragEventHandler<HTMLTextAreaElement>;
   /** highlight.js HTML for `value`; shown instead of the textarea when present */
   html?: string | null;
   textareaRef?: React.Ref<HTMLTextAreaElement>;
@@ -289,6 +334,8 @@ function EditorPane({
   side,
   value,
   onChange,
+  onPaste,
+  onDrop,
   html,
   textareaRef,
   format,
@@ -341,6 +388,10 @@ function EditorPane({
               ref={textareaRef}
               value={value}
               onChange={(e) => onChange?.(e.target.value)}
+              onPaste={onPaste}
+              onDrop={onDrop}
+              // A read-only textarea refuses drops unless dragover is cancelled
+              onDragOver={onDrop && readOnly ? (e) => e.preventDefault() : undefined}
               onScroll={handleScroll}
               wrap="off"
               spellCheck={false}

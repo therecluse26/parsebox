@@ -1,4 +1,5 @@
-import { forwardRef, useMemo, type ReactNode } from "react";
+import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 
 interface Props {
   count: number;
@@ -6,48 +7,88 @@ interface Props {
   errorLine?: number;
 }
 
-// Line numbers beside an editor; the parent syncs scrollTop with the editor
+// Lines drawn beyond each edge of the view, so a fast scroll does not show a blank gutter
+const OVERSCAN = 40;
+// The fallback for text-sm with leading-[1.5]; the real value is read from the style
+const DEFAULT_LINE_HEIGHT = 21;
+
+/**
+ * Line numbers beside an editor. The parent syncs scrollTop with the editor; the
+ * gutter draws only the numbers in view, so a render costs O(visible lines).
+ */
 export const LineGutter = forwardRef<HTMLDivElement, Props>(({ count, errorLine }, ref) => {
-  const numbers = useMemo(
-    () => Array.from({ length: count }, (_, i) => i + 1).join("\n"),
-    [count]
-  );
+  const boxRef = useRef<HTMLDivElement>(null);
+  useImperativeHandle(ref, () => boxRef.current as HTMLDivElement);
+  const [lineHeight, setLineHeight] = useState(DEFAULT_LINE_HEIGHT);
+  // The drawn lines: `rows` lines from 0-based line `start`
+  const [range, setRange] = useState({ start: 0, rows: 2 * OVERSCAN });
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const style = getComputedStyle(box);
+    const height = parseFloat(style.lineHeight) || DEFAULT_LINE_HEIGHT;
+    const paddingTop = parseFloat(style.paddingTop) || 0;
+    setLineHeight(height);
+
+    // Redraw only when the view leaves the drawn lines' inner part, in steps of OVERSCAN lines
+    const update = (sync: boolean) => {
+      const first = Math.max(0, Math.floor((box.scrollTop - paddingTop) / height));
+      const start = Math.max(0, Math.floor(first / OVERSCAN) * OVERSCAN - OVERSCAN);
+      const rows = Math.ceil(box.clientHeight / height) + 3 * OVERSCAN;
+      const apply = () =>
+        setRange((previous) => (previous.start === start && previous.rows === rows ? previous : { start, rows }));
+      // Draw before the next paint, so the numbers never lag the text
+      if (sync) flushSync(apply);
+      else apply();
+    };
+    const onScroll = () => update(true);
+    const observer = new ResizeObserver(() => update(false));
+    observer.observe(box);
+    box.addEventListener("scroll", onScroll, { passive: true });
+    update(false);
+    return () => {
+      observer.disconnect();
+      box.removeEventListener("scroll", onScroll);
+    };
+    // Again when the count changes: a shorter text can clamp the scroll position
+  }, [count]);
+
+  const start = Math.min(range.start, Math.max(0, count - 1));
+  const end = Math.min(count, start + range.rows);
+  let numbers = "";
+  let errorAt = -1;
+  for (let line = start + 1; line <= end; line++) {
+    if (line > start + 1) numbers += "\n";
+    if (line === errorLine) errorAt = numbers.length;
+    numbers += line;
+  }
 
   // Three text pieces, not one node per line: numbers before, the error line, numbers after
   let content: ReactNode = numbers;
-  if (errorLine !== undefined && Number.isInteger(errorLine) && errorLine >= 1 && errorLine <= count) {
-    const start = offsetOfLine(errorLine);
-    const end = start + String(errorLine).length;
+  if (errorAt !== -1) {
     content = (
       <>
-        {numbers.slice(0, start)}
+        {numbers.slice(0, errorAt)}
         <span className="-mx-1 rounded-sm bg-destructive/15 px-1 text-destructive">{errorLine}</span>
-        {numbers.slice(end)}
+        {numbers.slice(errorAt + String(errorLine).length)}
       </>
     );
   }
 
   return (
     <div
-      ref={ref}
+      ref={boxRef}
       aria-hidden="true"
       className="shrink-0 select-none overflow-hidden pb-6 pt-3 pl-3.5 pr-3 text-right font-mono text-sm leading-[1.5] text-gutter"
     >
-      <pre className="m-0 font-mono">{content}</pre>
+      {/* Full height, so the gutter scrolls as far as the editor; as wide as the longest number */}
+      <div className="relative" style={{ height: count * lineHeight, width: `${String(count).length}ch` }}>
+        <pre className="absolute inset-x-0 m-0 font-mono" style={{ top: start * lineHeight }}>
+          {content}
+        </pre>
+      </div>
     </div>
   );
 });
 LineGutter.displayName = "LineGutter";
-
-// Where line `line` starts in "1\n2\n3...": each earlier number plus its newline
-function offsetOfLine(line: number): number {
-  let offset = 0;
-  let digits = 1;
-  let first = 1; // the first number with `digits` digits
-  while (first * 10 <= line - 1) {
-    offset += 9 * first * (digits + 1);
-    first *= 10;
-    digits++;
-  }
-  return offset + (line - first) * (digits + 1);
-}

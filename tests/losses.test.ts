@@ -11,7 +11,7 @@ import { encode as msgpackEncode, decode as msgpackDecode } from "@msgpack/msgpa
 import { parse as dotenvParse } from "dotenv";
 import qs from "qs";
 import Papa from "papaparse";
-import { collectLosses, xmlReadsAsNumber } from "../src/lib/losses.ts";
+import { collectLosses, kindForCount, xmlReadsAsNumber } from "../src/lib/losses.ts";
 import { TOML_PARSE_OPTIONS } from "../src/lib/detectFormat.ts";
 
 // The app's readers and writers, as in SideBySideEditor (parseInput / stringifyOutput)
@@ -462,6 +462,20 @@ test("examples stop at the cap while counting continues", () => {
   assert.equal(item?.count, 500);
   assert.equal(item?.examples.length, 20);
   assert.equal(item?.examples[19], "[19].a");
+});
+
+test("a count of 1 reads singular", () => {
+  assert.equal(kindForCount("values dropped (key not in first row)", 1), "value dropped (key not in first row)");
+  assert.equal(kindForCount("nested objects written as [object Object]", 1), "nested object written as [object Object]");
+  assert.equal(kindForCount("carriage returns became line feeds", 1), "carriage return became line feeds");
+  assert.equal(kindForCount("backslashes changed", 1), "backslash changed");
+  assert.equal(kindForCount("dates became strings", 1), "date became strings");
+  assert.equal(kindForCount('strings "true"/"false"/"null" read back as values', 1), 'string "true"/"false"/"null" read back as values');
+  // Unchanged: other counts, no plural noun up front, and root kinds
+  assert.equal(kindForCount("values dropped (key not in first row)", 2), "values dropped (key not in first row)");
+  assert.equal(kindForCount("binary data became numbers", 1), "binary data became numbers");
+  assert.equal(kindForCount("NaN/Infinity became null", 1), "NaN/Infinity became null");
+  assert.equal(kindForCount("root attributes or text dropped", 1), "root attributes or text dropped");
 });
 
 // --- Fuzz: every claimed path changes; unreported conversions round-trip --------------
