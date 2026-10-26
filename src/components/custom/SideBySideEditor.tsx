@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from "react";
-import { ArrowLeftRight, Copy, Check } from "lucide-react";
+import { ArrowLeftRight, Copy, Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
 import { FormatSelect } from "./FormatSelect";
@@ -27,6 +27,8 @@ const previewOf = (text: string) => {
   return text.slice(0, cut > LIMITS.largeInputChars / 2 ? cut : LIMITS.largeInputChars);
 };
 
+const FIND_SHORTCUT = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘F" : "Ctrl+F";
+
 // "secret scan (over 10 MB)" → "secret scan skipped (over 10 MB)"
 const skippedNote = (item: string) =>
   item.includes(" (") ? item.replace(" (", " skipped (") : `${item} skipped`;
@@ -44,6 +46,7 @@ export default function SideBySideEditor() {
   const [redactSecrets, setRedactSecrets] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const inputRef = useRef<CodeEditorHandle>(null);
+  const outputRef = useRef<CodeEditorHandle>(null);
 
   const { result, busy } = useConversion({
     text: inputText,
@@ -252,6 +255,7 @@ export default function SideBySideEditor() {
       <EditorPane
         side="out"
         value={displayOutput}
+        editorRef={outputRef}
         syntaxFormat={activeOutputFormat}
         format={activeOutputFormat}
         onFormatChange={handleOutputFormatChange}
@@ -296,7 +300,7 @@ interface EditorPaneProps {
   onChange?: (value: string) => void;
   onPasteText?: (text: string, from: number, to: number) => boolean;
   onDropText?: (text: string) => boolean;
-  editorRef?: React.Ref<CodeEditorHandle>;
+  editorRef: React.RefObject<CodeEditorHandle>;
   /** The format that picks the highlighting and folding; null for plain text */
   syntaxFormat: string | null;
   format: string;
@@ -351,7 +355,20 @@ function EditorPane({
             detectedFormat={value ? detectedFormat : null}
           />
         </div>
-        {toolbarAction}
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() => editorRef.current?.openFind()}
+            disabled={!value}
+            title={`find (${FIND_SHORTCUT})`}
+            aria-label={side === "in" ? "Find in input" : "Find in output"}
+          >
+            <Search className="h-3.5 w-3.5" />
+          </Button>
+          {toolbarAction}
+        </div>
       </div>
       <div className="relative min-h-0 min-w-0 flex-1">
         <div className="absolute inset-0">

@@ -4,11 +4,14 @@ import { EditorView, GutterMarker, keymap, lineNumberMarkers, lineNumbers, place
 import { codeFolding, foldGutter, foldKeymap } from "@codemirror/language";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { editorHighlighting, editorTheme } from "./editorTheme";
+import { findKeymap, findPanel, openFindPanel } from "./findPanel";
 import { loadSyntax } from "@/lib/editor/languages";
 
 export interface CodeEditorHandle {
   /** Put the caret on a 1-based line and column, scroll it into view and focus the editor */
   jumpTo(line: number, column: number): void;
+  /** Open the find bar and focus it */
+  openFind(): void;
 }
 
 interface Props {
@@ -97,7 +100,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(
             errorLineField,
             errorNumber,
             compartments.history.of(history()),
-            keymap.of([...defaultKeymap, ...historyKeymap, ...foldKeymap]),
+            findPanel,
+            // The find keys go first, so Escape closes the find bar before it collapses the selection
+            keymap.of([...findKeymap, ...defaultKeymap, ...historyKeymap, ...foldKeymap]),
             placeholderText(placeholder),
             editorTheme,
             editorHighlighting,
@@ -177,6 +182,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(
         const caret = Math.min(target.from + Math.max(column - 1, 0), target.to);
         view.dispatch({ selection: { anchor: caret }, effects: EditorView.scrollIntoView(caret, { y: "center" }) });
         view.focus();
+      },
+      openFind() {
+        if (viewRef.current) openFindPanel(viewRef.current);
       },
     }));
 

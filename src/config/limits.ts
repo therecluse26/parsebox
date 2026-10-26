@@ -19,6 +19,8 @@ export const LIMITS = {
   largeInputChars: 250_000,
   /** The output pane shows at most this much; copy still copies the full output */
   displayMaxChars: 250_000,
+  /** The find bar counts matches up to this many, then shows "1000+" */
+  findMaxMatches: 1_000,
 
   /** jsonrepair runs only on invalid input up to this size */
   repairMaxChars: 20_000_000,

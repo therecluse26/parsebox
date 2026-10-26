@@ -21,6 +21,7 @@ Your text is never uploaded, logged or stored on a server, so it is safe to past
 - **Secret detection:** finds API keys and passwords, and can mask them in the output.
 - **Type generation:** TypeScript, Zod, JSON Schema, Go, Protobuf, Rust (serde), Python (Pydantic), C#, Kotlin, Swift and Java.
 - **Large files:** conversion runs in a Web Worker, so the page stays responsive.
+- **Find:** search the input or the output with Ctrl+F (⌘F on a Mac), with match case and regex options.
 
 ## Formats
 
